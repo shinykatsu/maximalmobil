@@ -18,10 +18,18 @@
   };
   const paintTC = (el, str) => {
     if (el._tc === str) return;
+    if (!el._cells || el._cells.length !== str.length) {
+      el.innerHTML = str.split('').map((ch) => (ch === ':' ? '<span class="c">:</span>' : '<span class="d"></span>')).join('');
+      el._cells = [...el.children];
+    }
+    for (let i = 0; i < str.length; i++) {
+      if (str[i] !== ':' && el._cells[i].textContent !== str[i]) el._cells[i].textContent = str[i];
+    }
     el._tc = str;
-    el.innerHTML = str.split('').map((ch) => (ch === ':' ? '<span class="c">:</span>' : `<span class="d">${ch}</span>`)).join('');
   };
   document.querySelectorAll('.tc').forEach((el) => paintTC(el, el.textContent.trim()));
+
+  let armLive = () => {};
 
   /* ---------- Klappe ---------- */
   const monitors = [...document.querySelectorAll('.monitor')];
@@ -88,6 +96,7 @@
       take += 1;
       takes.forEach((el) => swapText(el, String(take)));
       monitors.forEach(clap);
+      setTimeout(() => armLive(), 175);
     }
   };
   spurButtons.forEach((btn) => btn.addEventListener('click', () => {
@@ -100,27 +109,30 @@
   window.addEventListener('resize', placeThumb);
   document.fonts?.ready.then(placeThumb);
 
-  /* ---------- Laufender Timecode der Klappe: startet mit dem Schlag ---------- */
+  /* ---------- Laufender Timecode der Klappe: läuft ab dem Schlag 4,8 s und hält dann an ----------
+     WCAG 2.2.2: automatisch startende Bewegung endet nach weniger als 5 Sekunden. */
+  const REC_MS = 4800;
   const liveTC = document.querySelector('[data-tc="live"]');
-  let armLive = () => {};
   if (liveTC) {
+    const recMonitor = liveTC.closest('.monitor');
     let raf = 0;
-    let start = 0;
-    let armed = false;
-    let visible = false;
+    let recorded = 0;
+    let segStart = 0;
+    let until = 0;
+    const stop = () => { cancelAnimationFrame(raf); raf = 0; recMonitor?.classList.remove('is-rec'); };
     const tick = (now) => {
-      if (!start) start = now;
-      const frames = Math.floor(((now - start) / 1000) * FPS) % (FPS * 3600);
-      paintTC(liveTC, tcString(frames));
+      if (!segStart) segStart = now;
+      const ms = recorded + (now - segStart);
+      paintTC(liveTC, tcString(Math.floor((ms / 1000) * FPS) % (FPS * 3600)));
+      if (now >= until) { recorded = ms; segStart = 0; stop(); return; }
       raf = requestAnimationFrame(tick);
     };
-    const run = () => {
-      cancelAnimationFrame(raf);
-      if (armed && visible && motionOK()) raf = requestAnimationFrame(tick);
+    armLive = () => {
+      if (!motionOK()) return;
+      until = performance.now() + REC_MS;
+      recMonitor?.classList.add('is-rec');
+      if (!raf) { segStart = 0; raf = requestAnimationFrame(tick); }
     };
-    new IntersectionObserver(([entry]) => { visible = entry.isIntersecting; run(); }).observe(liveTC);
-    reduceMotion.addEventListener?.('change', run);
-    armLive = () => { armed = true; run(); };
   }
 
   /* ---------- Ablauf: Scroll treibt Abspielkopf, Timecode und Monitor ---------- */
@@ -153,8 +165,17 @@
     if (!dock || on === dockShown) return;
     dockShown = on;
     dock.classList.toggle('is-visible', on);
+    root.classList.toggle('dock-on', on);
     dock.inert = !on;
   };
+
+  // Fokus nie unter der Leiste unten (WCAG 2.4.11)
+  document.addEventListener('focusin', (e) => {
+    if (!dockShown || !dock || dock.contains(e.target)) return;
+    const r = e.target.getBoundingClientRect();
+    const top = dock.getBoundingClientRect().top;
+    if (r.bottom > top - 8) window.scrollBy({ top: r.bottom - top + 24, left: 0, behavior: 'auto' });
+  });
 
   const update = () => {
     if (!steps.length || !monitor) return;
@@ -162,6 +183,7 @@
     const probe = vh * (mobileQuery.matches ? 0.7 : 0.5);
     const tops = panels.map((p) => p.getBoundingClientRect().top);
     const lastRect = steps[steps.length - 1].getBoundingClientRect();
+    const listRect = stepsList ? stepsList.getBoundingClientRect() : null;
 
     let i = -1;
     tops.forEach((t, k) => { if (t <= probe) i = k; });
@@ -176,10 +198,7 @@
     setStep(i + 1);
     timeline?.style.setProperty('--p', p.toFixed(4));
     dockClips?.style.setProperty('--p', p.toFixed(4));
-    if (stepsList) {
-      const r = stepsList.getBoundingClientRect();
-      stepsList.style.setProperty('--sp', Math.min(1, Math.max(0, (probe - r.top) / Math.max(1, r.height))).toFixed(4));
-    }
+    if (listRect) stepsList.style.setProperty('--sp', Math.min(1, Math.max(0, (probe - listRect.top) / Math.max(1, listRect.height))).toFixed(4));
     const tc = tcString(Math.round(p * TOTAL_SECONDS * FPS));
     scrubTCs.forEach((el) => paintTC(el, tc));
 
@@ -219,8 +238,7 @@
   const approveBtn = document.querySelector('[data-approve-btn]');
   const approveLabel = document.querySelector('[data-approve-label]');
   approveBtn?.addEventListener('click', () => {
-    const on = approveBtn.getAttribute('aria-pressed') !== 'true';
-    approveBtn.setAttribute('aria-pressed', String(on));
+    const on = !approveBox.classList.contains('is-approved');
     approveBtn.textContent = on ? 'Freigabe zurücknehmen' : 'Freigeben';
     approveLabel.textContent = on ? 'Content freigegeben' : 'Änderungen offen';
     approveBox.classList.toggle('is-approved', on);
@@ -310,7 +328,7 @@
         setInvalid([form.email, form.telefon], 'e-reach', true, 'Bitte geben Sie eine E-Mail-Adresse oder eine Telefonnummer an, damit wir uns melden können.');
         if (!first) first = form.email;
       } else if (mail && !form.email.checkValidity()) {
-        setInvalid([form.email], 'e-reach', true, 'Diese E-Mail-Adresse scheint unvollständig. Bitte prüfen Sie sie, oder lassen Sie das Feld leer und geben Sie Ihre Telefonnummer an.');
+        setInvalid([form.email], 'e-reach', true, 'Bitte prüfen Sie die E-Mail-Adresse, zum Beispiel name@betrieb.de. Oder lassen Sie das Feld leer und geben Sie Ihre Telefonnummer an.');
         form.telefon.removeAttribute('aria-invalid');
         if (!first) first = form.email;
       } else {
@@ -358,7 +376,7 @@
           v('nachricht'),
         ].join('\n');
         window.location.href = `mailto:${MAIL}?subject=${encodeURIComponent(`Erstgespräch-Anfrage: ${v('betrieb')}`)}&body=${encodeURIComponent(body)}`;
-        showStatus('info', `<strong>Fast geschafft.</strong>Ihr E-Mail-Programm öffnet sich mit der fertigen Anfrage. Bitte dort auf Senden klicken. Falls sich nichts öffnet: ${fallback}`);
+        showStatus('info', `<strong>Fast geschafft.</strong>Ihr E-Mail-Programm öffnet sich mit der fertigen Anfrage. Bitte dort auf Senden klicken. Öffnet sich nichts, bleiben Ihre Eingaben hier stehen. ${fallback}`);
         return;
       }
 
@@ -370,7 +388,7 @@
         setBranche('', 'reset');
         showStatus('ok', '<strong>Danke, Ihre Anfrage ist angekommen.</strong>Wir melden uns bei Ihnen, um einen Termin für das Erstgespräch zu finden.');
       } catch (err) {
-        showStatus('error', `<strong>Das hat nicht geklappt.</strong>Ihre Anfrage wurde nicht gesendet. ${fallback}`);
+        showStatus('error', `<strong>Ihre Anfrage wurde nicht gesendet.</strong>Ihre Eingaben sind noch da. Versuchen Sie es gleich noch einmal. ${fallback}`);
       } finally {
         busy(false);
       }
