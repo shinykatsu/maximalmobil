@@ -1,0 +1,14 @@
+RewriteEngine On
+
+# /index.html → /
+RewriteCond %{THE_REQUEST} \s/index\.html[\s?] [NC]
+RewriteRule ^index\.html$ / [R=301,L]
+
+# /impressum.html → /impressum
+RewriteCond %{THE_REQUEST} \s/([^.\s?]+)\.html[\s?] [NC]
+RewriteRule ^ /%1 [R=301,L]
+
+# /impressum zeigt intern impressum.html
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME}.html -f
+RewriteRule ^(.+)$ $1.html [L]

@@ -23,20 +23,6 @@
   };
   document.querySelectorAll('.tc').forEach((el) => paintTC(el, el.textContent.trim()));
 
-  /* ---------- Tonspur ---------- */
-  document.querySelectorAll('[data-wave]').forEach((el) => {
-    const bars = 160;
-    let seed = 11;
-    const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
-    let rects = '';
-    for (let i = 0; i < bars; i++) {
-      const envelope = 0.3 + 0.7 * Math.abs(Math.sin((i / bars) * Math.PI * 4.6 + 0.4));
-      const h = Math.max(0.1, envelope * (0.35 + 0.65 * rnd())) * 26;
-      rects += `<rect x="${i * 2}" y="${((26 - h) / 2).toFixed(2)}" width="1.15" height="${h.toFixed(2)}" rx=".5"/>`;
-    }
-    el.innerHTML = `<svg viewBox="0 0 ${bars * 2} 26" preserveAspectRatio="none" focusable="false">${rects}</svg>`;
-  });
-
   /* ---------- Klappe ---------- */
   const monitors = [...document.querySelectorAll('.monitor')];
   const clap = (m) => {
@@ -368,7 +354,6 @@
           `Name: ${v('name')}`,
           `E-Mail: ${v('email') || '–'}`,
           `Telefon: ${v('telefon') || '–'}`,
-          `Erstgespräch: ${v('gespraech')}`,
           '',
           v('nachricht'),
         ].join('\n');
