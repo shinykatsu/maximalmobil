@@ -12,3 +12,49 @@ RewriteRule ^ /%1 [R=301,L]
 RewriteCond %{REQUEST_FILENAME} !-f
 RewriteCond %{REQUEST_FILENAME}.html -f
 RewriteRule ^(.+)$ $1.html [L]
+
+# ---------------------------------------------------------------
+# Ab hier: Fehlerseite, Sicherheit, Caching, Kompression
+# ---------------------------------------------------------------
+
+# Eigene Seite, wenn eine Adresse nicht existiert
+ErrorDocument 404 /404.html
+
+# Ordnerinhalte nie auflisten
+Options -Indexes
+
+# Dateitypen und Zeichensatz
+AddType font/woff2 .woff2
+AddType image/svg+xml .svg
+AddDefaultCharset utf-8
+AddCharset utf-8 .css .js .svg
+
+# Sicherheits-Header (gelten für alle Seiten und für anfrage.php)
+<IfModule mod_headers.c>
+  Header always set X-Content-Type-Options "nosniff"
+  Header always set X-Frame-Options "SAMEORIGIN"
+  Header always set Referrer-Policy "strict-origin-when-cross-origin"
+  Header always set Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=(), usb=()"
+  Header always set Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self'; font-src 'self'; connect-src 'self'; form-action 'self'; frame-ancestors 'self'; base-uri 'self'; object-src 'none'"
+  Header always unset X-Powered-By
+  Header unset X-Powered-By
+</IfModule>
+
+# Caching: HTML immer frisch, CSS/JS ein Jahr (beim Ändern ?v= in den Seiten erhöhen),
+# Schriften ein Jahr, Bilder einen Monat
+<IfModule mod_expires.c>
+  ExpiresActive On
+  ExpiresDefault "access plus 1 hour"
+  ExpiresByType text/html "access plus 0 seconds"
+  ExpiresByType text/css "access plus 1 year"
+  ExpiresByType text/javascript "access plus 1 year"
+  ExpiresByType application/javascript "access plus 1 year"
+  ExpiresByType font/woff2 "access plus 1 year"
+  ExpiresByType image/svg+xml "access plus 1 month"
+  ExpiresByType image/png "access plus 1 month"
+</IfModule>
+
+# Kompression für Text-Dateien (woff2 ist schon komprimiert)
+<IfModule mod_deflate.c>
+  AddOutputFilterByType DEFLATE text/html text/plain text/css text/javascript application/javascript application/json image/svg+xml
+</IfModule>

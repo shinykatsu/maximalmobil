@@ -17,8 +17,8 @@
 <link rel="preload" href="/assets/fonts/syne-800.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="/assets/fonts/outfit-300.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="/assets/fonts/outfit-400.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="stylesheet" href="/css/style.css">
-<script>(function(d){d.classList.replace('no-js','js');if(!matchMedia('(prefers-reduced-motion: reduce)').matches){d.classList.add('intro');setTimeout(function(){d.classList.remove('intro')},2500)}})(document.documentElement)</script>
+<link rel="stylesheet" href="/css/style.css?v=2026-10-22e">
+<script src="/js/head.js?v=2026-10-22e"></script>
 </head>
 <body>
 
@@ -45,7 +45,7 @@
     <a href="#branchen">Branchen</a>
     <a href="#pakete">Pakete</a>
   </nav>
-  <a class="btn btn-primary btn-sm" href="#kontakt">Erstgespräch anfragen</a>
+  <a class="btn btn-primary btn-sm" href="#kontakt"><span class="cta-long">Erstgespräch anfragen</span><span class="cta-short">Anfragen</span></a>
 </header>
 
 <main id="inhalt">
@@ -167,6 +167,7 @@
         </figure>
       </div>
 
+      <span class="steps-line" aria-hidden="true"></span>
       <ol class="steps">
         <li class="step" id="schritt-1" data-step="1">
           <div class="step-panel">
@@ -364,7 +365,7 @@
         </ul>
       </div>
 
-      <form class="form" id="anfrage" action="mailto:info@maximalmobil.de" method="post" enctype="text/plain" novalidate data-endpoint="">
+      <form class="form" id="anfrage" action="/anfrage.php" method="post" novalidate data-endpoint="/anfrage.php">
         <fieldset class="field field-choice">
           <legend class="field-label">Branche <span class="optional">optional</span></legend>
           <div class="choices">
@@ -376,12 +377,12 @@
         <div class="field-row">
           <div class="field">
             <label class="field-label" for="f-betrieb">Betrieb</label>
-            <input id="f-betrieb" name="betrieb" type="text" autocomplete="organization" required aria-describedby="e-betrieb">
+            <input id="f-betrieb" name="betrieb" type="text" autocomplete="organization" maxlength="120" required aria-describedby="e-betrieb">
             <p class="field-error" id="e-betrieb" hidden>Bitte nennen Sie den Namen Ihres Betriebs.</p>
           </div>
           <div class="field">
             <label class="field-label" for="f-name">Ihr Name</label>
-            <input id="f-name" name="name" type="text" autocomplete="name" required aria-describedby="e-name">
+            <input id="f-name" name="name" type="text" autocomplete="name" maxlength="100" required aria-describedby="e-name">
             <p class="field-error" id="e-name" hidden>Bitte nennen Sie Ihren Namen.</p>
           </div>
         </div>
@@ -389,11 +390,11 @@
         <div class="field-row">
           <div class="field">
             <label class="field-label" for="f-mail">E-Mail</label>
-            <input id="f-mail" name="email" type="email" autocomplete="email" inputmode="email" aria-describedby="h-reach e-reach">
+            <input id="f-mail" name="email" type="email" autocomplete="email" inputmode="email" maxlength="160" aria-describedby="h-reach e-reach">
           </div>
           <div class="field">
             <label class="field-label" for="f-tel">Telefon</label>
-            <input id="f-tel" name="telefon" type="tel" autocomplete="tel" aria-describedby="h-reach e-reach">
+            <input id="f-tel" name="telefon" type="tel" autocomplete="tel" maxlength="40" aria-describedby="h-reach e-reach">
           </div>
         </div>
         <p class="field-hint" id="h-reach">E-Mail oder Telefon genügt.</p>
@@ -401,7 +402,8 @@
 
         <div class="field">
           <label class="field-label" for="f-msg">Nachricht <span class="optional">optional</span></label>
-          <textarea id="f-msg" name="nachricht" rows="4" placeholder="Was möchten Sie zeigen? Was ist Ihnen wichtig?"></textarea>
+          <textarea id="f-msg" name="nachricht" rows="4" maxlength="3000" aria-describedby="e-msg" placeholder="Was möchten Sie zeigen? Was ist Ihnen wichtig?"></textarea>
+          <p class="field-error" id="e-msg" hidden>Die Nachricht ist zu lang (höchstens 3.000 Zeichen).</p>
         </div>
 
         <div class="hp" aria-hidden="true">
@@ -449,6 +451,6 @@
   <a class="btn btn-primary btn-sm dock-cta" href="#kontakt"><span class="cta-long">Erstgespräch anfragen</span><span class="cta-short">Anfragen</span></a>
 </nav>
 
-<script src="/js/main.js" defer></script>
+<script src="/js/main.js?v=2026-10-22e" defer></script>
 </body>
 </html>

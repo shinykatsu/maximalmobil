@@ -145,7 +145,12 @@
   const dockClips = dock ? dock.querySelector('.dock-clips') : null;
   const scrubTCs = [...document.querySelectorAll('[data-tc="scrub"]')];
   const clipLinks = [...document.querySelectorAll('[data-clip]')];
-  const mobileQuery = window.matchMedia('(max-width: 860px)');
+  const tlPlayhead = timeline ? timeline.querySelector('.tl-playhead') : null;
+  const dockPlayhead = dockClips ? dockClips.querySelector('.dock-playhead') : null;
+  const stepsLine = document.querySelector('.steps-line');
+  let lastP = '', lastSp = '';
+  const mobileQuery = window.matchMedia('(max-width: 53.75em)');
+  const sideBySide = window.matchMedia('(max-width: 53.75em) and (orientation: landscape) and (max-height: 31.25em)');
   let activeStep = -1;
   let dockShown = false;
 
@@ -180,7 +185,7 @@
   const update = () => {
     if (!steps.length || !monitor) return;
     const vh = window.innerHeight;
-    const probe = vh * (mobileQuery.matches ? 0.7 : 0.5);
+    const probe = vh * (mobileQuery.matches && !sideBySide.matches ? 0.7 : 0.5);
     const tops = panels.map((p) => p.getBoundingClientRect().top);
     const lastRect = steps[steps.length - 1].getBoundingClientRect();
     const listRect = stepsList ? stepsList.getBoundingClientRect() : null;
@@ -196,9 +201,17 @@
     }
 
     setStep(i + 1);
-    timeline?.style.setProperty('--p', p.toFixed(4));
-    dockClips?.style.setProperty('--p', p.toFixed(4));
-    if (listRect) stepsList.style.setProperty('--sp', Math.min(1, Math.max(0, (probe - listRect.top) / Math.max(1, listRect.height))).toFixed(4));
+    // Nur das jeweilige Element bekommt den Wert (nicht vererbt): kein Neuberechnen ganzer Bereiche pro Bild
+    const pStr = p.toFixed(4);
+    if (pStr !== lastP) {
+      lastP = pStr;
+      tlPlayhead?.style.setProperty('--p', pStr);
+      dockPlayhead?.style.setProperty('--p', pStr);
+    }
+    if (listRect && stepsLine) {
+      const spStr = Math.min(1, Math.max(0, (probe - listRect.top) / Math.max(1, listRect.height))).toFixed(3);
+      if (spStr !== lastSp) { lastSp = spStr; stepsLine.style.setProperty('--sp', spStr); }
+    }
     const tc = tcString(Math.round(p * TOTAL_SECONDS * FPS));
     scrubTCs.forEach((el) => paintTC(el, tc));
 
@@ -297,7 +310,9 @@
     });
   }
 
-  /* ---------- Formular ---------- */
+  /* ---------- Formular ----------
+     Sendet an /anfrage.php (data-endpoint). Ohne JavaScript schickt der Browser das Formular
+     direkt dorthin und bekommt eine Antwortseite. Eingaben bleiben bei jedem Fehler stehen. */
   const form = document.getElementById('anfrage');
   if (form) {
     const statusBox = form.querySelector('[data-form-status]');
@@ -306,13 +321,30 @@
     const DEFAULT_LABEL = submitLabel.textContent;
     const MAIL = 'info@maximalmobil.de';
     const PHONE = '+49 173 6386145';
+    const TIMEOUT_MS = 15000;
+    const loadedAt = performance.now();
     const fallback = `Schreiben Sie uns an <a href="mailto:${MAIL}">${MAIL}</a> oder rufen Sie an: <a href="tel:+491736386145">${PHONE}</a>.`;
+    let sending = false;
+
+    // Feld oder Feldgruppe -> Fehlermeldung
+    const ERROR_TARGETS = {
+      betrieb: { id: 'e-betrieb', inputs: () => [form.betrieb] },
+      name: { id: 'e-name', inputs: () => [form.name] },
+      reach: { id: 'e-reach', inputs: () => [form.email, form.telefon] },
+      email: { id: 'e-reach', inputs: () => [form.email] },
+      telefon: { id: 'e-reach', inputs: () => [form.telefon] },
+      nachricht: { id: 'e-msg', inputs: () => [form.nachricht] },
+    };
 
     const setInvalid = (inputs, errorId, invalid, message) => {
       const err = document.getElementById(errorId);
       inputs.forEach((inp) => { if (invalid) inp.setAttribute('aria-invalid', 'true'); else inp.removeAttribute('aria-invalid'); });
       if (message) err.textContent = message;
       err.hidden = !invalid;
+    };
+
+    const clearAll = () => {
+      Object.values(ERROR_TARGETS).forEach((t) => setInvalid(t.inputs(), t.id, false));
     };
 
     const validate = () => {
@@ -324,16 +356,37 @@
       });
       const mail = form.email.value.trim();
       const tel = form.telefon.value.trim();
+      const telDigits = tel.replace(/\D/g, '');
       if (!mail && !tel) {
         setInvalid([form.email, form.telefon], 'e-reach', true, 'Bitte geben Sie eine E-Mail-Adresse oder eine Telefonnummer an, damit wir uns melden können.');
         if (!first) first = form.email;
       } else if (mail && !form.email.checkValidity()) {
-        setInvalid([form.email], 'e-reach', true, 'Bitte prüfen Sie die E-Mail-Adresse, zum Beispiel name@betrieb.de. Oder lassen Sie das Feld leer und geben Sie Ihre Telefonnummer an.');
+        setInvalid([form.email], 'e-reach', true, tel
+          ? 'Bitte prüfen Sie die E-Mail-Adresse, zum Beispiel name@betrieb.de, oder lassen Sie das Feld leer.'
+          : 'Bitte prüfen Sie die E-Mail-Adresse, zum Beispiel name@betrieb.de. Oder lassen Sie das Feld leer und geben Sie Ihre Telefonnummer an.');
         form.telefon.removeAttribute('aria-invalid');
         if (!first) first = form.email;
+      } else if (tel && (!/^[0-9+()/.\-\s]+$/.test(tel) || telDigits.length < 5)) {
+        setInvalid([form.telefon], 'e-reach', true, 'Bitte geben Sie die Telefonnummer nur mit Ziffern und + ( ) / - an, zum Beispiel 0123 456789.');
+        form.email.removeAttribute('aria-invalid');
+        if (!first) first = form.telefon;
       } else {
         setInvalid([form.email, form.telefon], 'e-reach', false);
       }
+      setInvalid([form.nachricht], 'e-msg', false);
+      return first;
+    };
+
+    // Fehler des Servers an die passenden Felder schreiben
+    const showServerErrors = (errors) => {
+      clearAll();
+      let first = null;
+      Object.entries(errors || {}).forEach(([key, msg]) => {
+        const t = ERROR_TARGETS[key];
+        if (!t) return;
+        setInvalid(t.inputs(), t.id, true, msg);
+        if (!first) first = t.inputs()[0];
+      });
       return first;
     };
 
@@ -349,47 +402,71 @@
     };
 
     const busy = (on) => {
+      sending = on;
       submitBtn.disabled = on;
+      form.setAttribute('aria-busy', String(on));
       submitLabel.textContent = on ? 'Wird gesendet … ' : DEFAULT_LABEL;
     };
 
+    // Fertige Anfrage als E-Mail: Rettungsweg, wenn der Server nicht erreichbar ist
+    const mailtoHref = () => {
+      const v = (k) => (form[k] ? form[k].value : '').toString().trim();
+      const branche = (form.querySelector('input[name="branche"]:checked') || {}).value || 'nicht angegeben';
+      const body = [`Branche: ${branche}`, `Betrieb: ${v('betrieb')}`, `Name: ${v('name')}`, `E-Mail: ${v('email') || '–'}`, `Telefon: ${v('telefon') || '–'}`, '', v('nachricht')].join('\n');
+      return `mailto:${MAIL}?subject=${encodeURIComponent(`Erstgespräch-Anfrage: ${v('betrieb')}`)}&body=${encodeURIComponent(body)}`;
+    };
+    const rescue = () => `Sie können die Anfrage auch <a href="${mailtoHref().replace(/"/g, '&quot;')}">als E-Mail senden</a> oder anrufen: <a href="tel:+491736386145">${PHONE}</a>.`;
+
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
-      if (form.website.value) return; // Spam-Falle
+      if (sending) return; // kein doppeltes Senden
       const firstInvalid = validate();
       if (firstInvalid) { firstInvalid.focus(); return; }
 
-      const data = new FormData(form);
-      data.delete('website');
       const endpoint = form.dataset.endpoint;
-
-      // Ohne Formular-Dienst: fertige E-Mail im eigenen Mailprogramm öffnen.
       if (!endpoint) {
-        const v = (k) => (data.get(k) || '').toString().trim();
-        const body = [
-          `Branche: ${v('branche') || 'nicht angegeben'}`,
-          `Betrieb: ${v('betrieb')}`,
-          `Name: ${v('name')}`,
-          `E-Mail: ${v('email') || '–'}`,
-          `Telefon: ${v('telefon') || '–'}`,
-          '',
-          v('nachricht'),
-        ].join('\n');
-        window.location.href = `mailto:${MAIL}?subject=${encodeURIComponent(`Erstgespräch-Anfrage: ${v('betrieb')}`)}&body=${encodeURIComponent(body)}`;
+        window.location.href = mailtoHref();
         showStatus('info', `<strong>Fast geschafft.</strong>Ihr E-Mail-Programm öffnet sich mit der fertigen Anfrage. Bitte dort auf Senden klicken. Öffnet sich nichts, bleiben Ihre Eingaben hier stehen. ${fallback}`);
         return;
       }
 
+      if (navigator.onLine === false) {
+        showStatus('error', `<strong>Sie sind gerade offline.</strong>Ihre Eingaben sind noch da. Sobald die Verbindung wieder steht, senden Sie die Anfrage einfach noch einmal.`);
+        return;
+      }
+
+      const data = new FormData(form);
+      data.set('fill_ms', String(Math.round(performance.now() - loadedAt)));
+
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
       busy(true);
       try {
-        const res = await fetch(endpoint, { method: 'POST', body: data, headers: { Accept: 'application/json' } });
-        if (!res.ok) throw new Error(String(res.status));
-        form.reset();
-        setBranche('', 'reset');
-        showStatus('ok', '<strong>Danke, Ihre Anfrage ist angekommen.</strong>Wir melden uns bei Ihnen, um einen Termin für das Erstgespräch zu finden.');
+        const res = await fetch(endpoint, { method: 'POST', body: data, headers: { Accept: 'application/json' }, signal: ctrl.signal });
+        let json = {};
+        try { json = await res.json(); } catch { json = {}; }
+
+        if (res.ok && json.ok) {
+          form.reset();
+          clearAll();
+          setBranche('', 'reset');
+          showStatus('ok', '<strong>Danke, Ihre Anfrage ist angekommen.</strong>Wir melden uns bei Ihnen, um einen Termin für das Erstgespräch zu finden.');
+        } else if (res.status === 422) {
+          const first = showServerErrors(json.errors);
+          statusBox.hidden = true;
+          if (first) first.focus();
+        } else if (res.status === 429) {
+          showStatus('error', `<strong>Zu viele Anfragen in kurzer Zeit.</strong>Ihre Eingaben sind noch da. Bitte versuchen Sie es in einer Stunde noch einmal. ${rescue()}`);
+        } else {
+          showStatus('error', `<strong>Ihre Anfrage wurde nicht gesendet.</strong>Das lag an uns, nicht an Ihnen. Ihre Eingaben sind noch da. Versuchen Sie es in ein paar Minuten noch einmal. ${rescue()}`);
+        }
       } catch (err) {
-        showStatus('error', `<strong>Ihre Anfrage wurde nicht gesendet.</strong>Ihre Eingaben sind noch da. Versuchen Sie es gleich noch einmal. ${fallback}`);
+        const timedOut = err && err.name === 'AbortError';
+        showStatus('error', timedOut
+          ? `<strong>Noch keine Bestätigung.</strong>Unser Server hat nicht rechtzeitig geantwortet. Vielleicht ist Ihre Anfrage trotzdem angekommen. Ihre Eingaben sind noch da: Senden Sie ruhig noch einmal, schlimmstenfalls erreicht uns die Anfrage doppelt. ${rescue()}`
+          : `<strong>Ihre Anfrage wurde nicht gesendet.</strong>Die Verbindung zu unserem Server kam nicht zustande. Ihre Eingaben sind noch da. Versuchen Sie es gleich noch einmal. ${rescue()}`);
       } finally {
+        clearTimeout(timer);
         busy(false);
       }
     });
