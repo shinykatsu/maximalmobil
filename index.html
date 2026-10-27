@@ -17,8 +17,8 @@
 <link rel="preload" href="/assets/fonts/syne-800.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="/assets/fonts/outfit-300.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="/assets/fonts/outfit-400.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="stylesheet" href="/css/style.css?v=2026-10-27g">
-<script src="/js/head.js?v=2026-10-27g"></script>
+<link rel="stylesheet" href="/css/style.css?v=2026-10-27i">
+<script src="/js/head.js?v=2026-10-27i"></script>
 </head>
 <body>
 
@@ -52,6 +52,14 @@
   <a class="btn btn-primary btn-sm" href="#kontakt"><span class="cta-long">Erstgespräch anfragen</span><span class="cta-short">Anfragen</span></a>
   <a class="head-call" href="tel:+491736386145"><svg class="i" aria-hidden="true"><use href="#i-phone"/></svg>Anrufen</a>
 </header>
+
+<!-- Telefon (App-Ansicht): Leiste unten; steht im Code hier, damit Tastatur und Screenreader sie gleich nach dem Kopf erreichen -->
+<nav class="tabbar" aria-label="Bereiche" data-tabbar>
+  <a href="#ablauf" data-tab-link="ablauf" aria-current="true"><svg class="i" aria-hidden="true"><use href="#i-steps"/></svg><span>Ablauf</span></a>
+  <a href="#branchen" data-tab-link="branchen"><svg class="i" aria-hidden="true"><use href="#i-lanes"/></svg><span>Branchen</span></a>
+  <a href="#pakete" data-tab-link="pakete"><svg class="i" aria-hidden="true"><use href="#i-month"/></svg><span>Pakete</span></a>
+  <a href="#kontakt" data-tab-link="anfrage" class="tab-cta"><span>Anfragen</span><svg class="i" aria-hidden="true"><use href="#i-arrow"/></svg></a>
+</nav>
 
 <main id="inhalt">
 
@@ -453,13 +461,6 @@
   </div>
 </footer>
 
-<nav class="tabbar" aria-label="Bereiche" data-tabbar>
-  <a href="#ablauf" data-tab-link="ablauf" aria-current="true"><svg class="i" aria-hidden="true"><use href="#i-steps"/></svg><span>Ablauf</span></a>
-  <a href="#branchen" data-tab-link="branchen"><svg class="i" aria-hidden="true"><use href="#i-lanes"/></svg><span>Branchen</span></a>
-  <a href="#pakete" data-tab-link="pakete"><svg class="i" aria-hidden="true"><use href="#i-month"/></svg><span>Pakete</span></a>
-  <a href="#kontakt" data-tab-link="anfrage" class="tab-cta"><span>Anfragen</span><svg class="i" aria-hidden="true"><use href="#i-arrow"/></svg></a>
-</nav>
-
 <nav class="dock" aria-label="Ablauf, Schnellnavigation" data-dock inert>
   <span class="tc dock-tc" data-tc="scrub" aria-hidden="true">00:00:00:00</span>
   <ol class="dock-clips">
@@ -473,6 +474,6 @@
   <a class="btn btn-primary btn-sm dock-cta" href="#kontakt"><span class="cta-long">Erstgespräch anfragen</span><span class="cta-short">Anfragen</span></a>
 </nav>
 
-<script src="/js/main.js?v=2026-10-27g" defer></script>
+<script src="/js/main.js?v=2026-10-27i" defer></script>
 </body>
 </html>

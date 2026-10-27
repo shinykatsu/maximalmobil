@@ -252,6 +252,9 @@
   /* ---------- Echte Clips in den Monitoren ----------
      Liste aus /assets/videos/videos.json, je Monitor eigene zufällige Reihenfolge (Fisher-Yates).
      Zwei Videos pro Monitor: das nächste lädt unsichtbar vor und blendet in 250 ms über.
+     Der erste Clip lädt schon, sobald der Monitor sichtbar ist (oben also während der Klappe),
+     jeder weitere erst ab der Hälfte des laufenden. Kleine Monitore (bis 600 Gerätepixel breit)
+     bekommen die Fassung 540x960 (<name>-s), der große Sucher am Telefon 720x1280.
      Spielt nur sichtbar; bei „weniger Bewegung“ oder Datensparmodus nur ein Standbild.
      Lässt sich ein Clip nicht laden, kommt der nächste; klappt keiner, bleibt die Klappe. */
   const VIDEO_DIR = '/assets/videos/';
@@ -337,14 +340,24 @@
       if (pending && pending.name === name) pending = null;
     };
 
-    const srcFor = (clip, ext) => `${VIDEO_DIR}${clip.name}.${ext}`;
+    // Quellen in der Reihenfolge, in der sie versucht werden: passende Größe zuerst, WebM vor MP4
+    const smallScreen = () => {
+      const w = box.getBoundingClientRect().width * (window.devicePixelRatio || 1);
+      return w > 0 && w <= 600;
+    };
+    const sourcesFor = (clip) => {
+      const sizes = smallScreen() ? ['-s', ''] : [''];
+      const exts = canWebm ? ['webm', 'mp4'] : ['mp4'];
+      return sizes.flatMap((s) => exts.map((e) => `${VIDEO_DIR}${clip.name}${s}.${e}`));
+    };
     const assign = (v, clip) => {
       if (v._clip === clip.name && !v._failed) return;
       v._clip = clip.name;
       v._failed = false;
-      v._ext = canWebm ? 'webm' : 'mp4';
+      v._srcs = sourcesFor(clip);
+      v._si = 0;
       v.preload = 'auto';
-      v.src = srcFor(clip, v._ext);
+      v.src = v._srcs[0];
       v.load();
     };
 
@@ -366,6 +379,27 @@
       if (mode !== 'video' || list.length < 2) { pending = null; return; }
       pending = pick();
       if (pending) assign(back, pending);
+    };
+
+    // Erster Clip: lädt, sobald der Monitor sichtbar ist, damit er nach der Klappe sofort laufen kann
+    const warm = () => {
+      if (mode !== 'video' || started || busy || pending || !list.length) return;
+      pending = pick();
+      if (pending) assign(back, pending);
+    };
+
+    // Nächster Clip: erst ab der Hälfte des laufenden, damit beide nicht gleichzeitig laden
+    const armPreload = (v) => {
+      if (v._onTime) v.removeEventListener('timeupdate', v._onTime);
+      v._onTime = () => {
+        if (v !== front || v._clip !== shown) return;
+        if (v.duration && v.currentTime >= v.duration / 2) {
+          v.removeEventListener('timeupdate', v._onTime);
+          v._onTime = null;
+          if (!pending) preloadNext();
+        }
+      };
+      v.addEventListener('timeupdate', v._onTime);
     };
 
     const hide = () => {
@@ -420,7 +454,7 @@
         fig.classList.add('has-media');
         updatePauseUI();
         busy = false;
-        setTimeout(preloadNext, 400);
+        armPreload(front);
       } catch (err) {
         busy = false;
         if (err && err.name === 'NotAllowedError') {
@@ -453,13 +487,13 @@
 
     [first, second].forEach((v) => {
       v.addEventListener('ended', () => { if (v === front) playNext(); });
-      // Ein Fehler-Listener für alle Fälle: erst WebM -> MP4 versuchen, dann Clip aussortieren
+      // Ein Fehler-Listener für alle Fälle: erst die übrigen Quellen versuchen (MP4, große Fassung), dann Clip aussortieren
       v.addEventListener('error', () => {
         const name = v._clip;
         if (!name) return;
-        if (v._ext === 'webm') {
-          v._ext = 'mp4';
-          v.src = `${VIDEO_DIR}${name}.mp4`;
+        if (v._srcs && v._si < v._srcs.length - 1) {
+          v._si += 1;
+          v.src = v._srcs[v._si];
           v.load();
           if (v._fail) v.play().catch(() => {});
           return;
@@ -478,7 +512,7 @@
       get shown() { return shown; },
       isActive: () => mode === 'video' && started,
       sync,
-      setVisible(on) { visible = on; sync(); },
+      setVisible(on) { visible = on; if (on) warm(); sync(); },
       setStage(on) { if (stage === on) return; stage = on; sync(); },
       setFilter(b) {
         list = usable(b);
@@ -491,7 +525,8 @@
           if (shouldPlay()) playNext(); else hide();
           return;
         }
-        if (started) preloadNext();
+        if (started) armPreload(front);
+        else if (visible) warm();
         sync();
       },
     });

@@ -62,23 +62,38 @@
 :root[data-theme="light"]{
   color-scheme:light;
   --bg:#fdfdfb;
-  --bone:#111111;
-  --bone-dim:#4d4b46;
-  --bone-faint:#6a6761;
-  --surface:#f3f2ee;
-  --surface-2:#efede8;
-  --line:#e4e1db;
-  --line-2:#d2cec6;
-  --line-ctl:#8a867f;
-  --accent:#5c7300;
+  --bone:#0a0a0a;          /* Text (CI) */
+  --bone-dim:#36352f;      /* 12 : 1 auf Papier */
+  --bone-faint:#57544e;    /* 7,4 : 1 */
+  --surface:#f0eee9;
+  --surface-2:#e7e4dd;
+  --line:#d8d4cc;          /* Raster und Trennlinien */
+  --line-2:#b9b4aa;        /* Rahmen von Pills, Clips, Feldern */
+  --line-ctl:#75716a;      /* Feldgrenzen, 4,8 : 1 */
+  --accent:#5c7300;        /* Lime dunkel (CI), 5,3 : 1 */
+  --lime-edge:#98c202;     /* Kante für Lime-Flächen auf Papier */
 }
 /* Dunkle Inseln: Monitore und der Sucher am Telefon sind Bildschirme und bleiben dunkel */
 :root[data-theme="light"] .mon-screen,
 :root[data-theme="light"].app .hero-grid{
-  color-scheme:dark;color:var(--bone);
+  color-scheme:dark;color:var(--bone);font-weight:300;
   --bg:#0a0a0a;--bone:#e8e4df;--bone-dim:#a8a5a0;--bone-faint:#8f8c88;
   --surface:#131311;--surface-2:#1c1c19;--line:#222222;--line-2:#2c2b27;--line-ctl:#85837d;--accent:#c8ff00;
 }
+/* Dunkle Schrift auf Papier wirkt dünner als helle auf Schwarz: Lesetext im hellen Design in Outfit 400 */
+:root[data-theme="light"] body,
+:root[data-theme="light"] .form input:not([type=radio]),
+:root[data-theme="light"] .form textarea{font-weight:400}
+/* Lime-Flächen bekommen auf Papier eine feine Kante, sonst verschwimmt ihr Rand */
+:root[data-theme="light"] .btn-primary,
+:root[data-theme="light"] .tabbar .tab-cta,
+:root[data-theme="light"] .step-freigabe .step-panel{box-shadow:inset 0 0 0 1px var(--lime-edge)}
+/* Aktive Clip-Nummer auf Surface 2: dunkles Lime erreicht dort keine 4,5 : 1, deshalb Text-Schwarz */
+:root[data-theme="light"] .clip.is-active .clip-no,
+:root[data-theme="light"] .dock-clips a[aria-current="step"] .clip-no{color:var(--bone)}
+/* Leisten unten deckend, damit keine Schrift durchscheint */
+:root[data-theme="light"] .dock,
+:root[data-theme="light"] .tabbar{background:var(--bg)}
 
 /* ---------- Grundlagen ---------- */
 *,*::before,*::after{box-sizing:border-box}
@@ -285,8 +300,8 @@ strong{font-weight:400;color:var(--bone)}
 
 /* Videos anhalten (WCAG 2.2.2) */
 .mon-pause,.m-pause{display:inline-flex;align-items:center;min-height:44px;padding:0;border:0;background:none;font:inherit;font-weight:400;cursor:pointer;transition:color .2s}
-.mon-pause{margin-block:-11px;font-size:var(--fs-label);letter-spacing:.06em;color:var(--bone-faint)}
-.m-pause{position:absolute;left:7%;bottom:4.5%;font-size:max(10px,3.4cqw);letter-spacing:.14em;text-transform:uppercase;color:var(--bone)}
+.mon-pause{min-width:44px;justify-content:flex-end;margin-block:-11px;font-size:var(--fs-label);letter-spacing:.06em;color:var(--bone-faint)}
+.m-pause{min-width:44px;position:absolute;left:7%;bottom:4.5%;font-size:max(10px,3.4cqw);letter-spacing:.14em;text-transform:uppercase;color:var(--bone)}
 .mon-pause[hidden],.m-pause[hidden]{display:none}
 @media (hover:hover){.mon-pause:hover,.m-pause:hover{color:var(--accent)}}
 
@@ -567,7 +582,7 @@ strong{font-weight:400;color:var(--bone)}
 .form-status{padding:18px 20px;border:1px solid var(--line-2);border-radius:12px;background:var(--bg);color:var(--bone-dim);font-size:var(--fs-ui);line-height:1.6}
 .form-status:focus{outline:none}
 .form-status.is-ok{border-color:var(--accent)}
-.form-status strong{display:block;margin-bottom:4px;font-family:var(--f-display);font-weight:800;font-size:1.15rem;letter-spacing:-.02em;color:var(--bone)}
+.form-status strong{display:block;margin-bottom:4px;font-family:var(--f-display);font-weight:800;font-size:1.125rem;letter-spacing:-.02em;color:var(--bone)}
 .form-status a{color:var(--bone)}
 
 /* ---------- Fuß ---------- */
