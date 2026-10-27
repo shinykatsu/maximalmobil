@@ -855,6 +855,72 @@ html.dock-on{scroll-padding-bottom:calc(var(--dock-h) + 16px)}
   p,.pk-list li,.lane li,.legal-body li{hyphens:auto;-webkit-hyphens:auto;hyphenate-limit-chars:10 4 4}
 }
 
+/* ---------- Telefon als App (Startseite, unter 600 px Breite, hochkant; Klasse .app setzt head.js) ----------
+   Oben der Sucher mit laufendem Clip, unten fest die Leiste mit vier Bereichen. Ohne JavaScript bleibt alles untereinander. */
+.tabbar,.head-call{display:none}
+.app{--tab-h:64px;scroll-padding-bottom:calc(var(--tab-h) + 16px)}
+.app body{padding-bottom:calc(var(--tab-h) + env(safe-area-inset-bottom,0px))}
+
+/* Kopf: Wortmarke und Anrufen (Anfragen sitzt in der Leiste) */
+.app .site-head .btn-sm{display:none}
+.app .head-call{display:inline-flex;align-items:center;gap:8px;min-height:44px;font-weight:400;font-size:var(--fs-ui);color:var(--bone);text-decoration:none}
+.app .head-call .i{width:18px;height:18px;color:var(--lime)}
+
+/* Sucher: der Clip füllt fast den Bildschirm, Headline und Spurwahl liegen unten darauf */
+.app .hero{min-height:0;padding-bottom:0;row-gap:0}
+.app .hero-grid{grid-template-columns:minmax(0,1fr);padding:0 12px}
+.app .hero-copy,.app .monitor-hero{grid-area:1 / 1}
+.app .monitor-hero{display:flex;position:relative;justify-self:stretch;gap:0}
+.app .monitor-hero .mon-screen{width:100%;height:calc(100svh - var(--head-h) - var(--tab-h) - 12px);min-height:420px;aspect-ratio:auto}
+.app .monitor-hero .mon-screen::after{content:"";position:absolute;left:0;right:0;bottom:0;height:72%;background:linear-gradient(180deg,rgba(10,10,10,0),rgba(10,10,10,.72) 32%,rgba(10,10,10,.9) 58%,rgba(10,10,10,.95));pointer-events:none}
+.app .monitor-hero .m-slate{top:5%;transform-origin:0 0;transform:translateX(11%) scale(.78)}
+.app .monitor-hero.has-media .m-slate{transform:scale(.3)}
+.app .monitor-hero .mon-caption{position:absolute;top:12px;right:12px;z-index:3;gap:14px;padding:0 4px 0 12px;border-radius:999px;background:rgba(10,10,10,.62)}
+.app .monitor-hero .rec-tc{color:var(--bone-dim)}
+.app .hero-copy{position:relative;z-index:2;align-self:end;padding:0 20px 22px}
+.app .display{font-size:calc((100vw - 64px) / 10.6)}
+.app .display .row{white-space:nowrap}
+.app .lead{margin-top:12px;font-size:1rem;line-height:1.55;color:var(--bone)}
+.app .spurwahl{margin-top:16px}
+.app .spurwahl .field-label{color:var(--bone-dim)}
+.app .spur-buttons{display:grid;grid-template-columns:1fr 1fr;width:100%;background:rgba(10,10,10,.72)}
+.app .spur{justify-content:center}
+.app .hero-actions,.app .hero .timeline{display:none}
+
+/* Bereiche: nur der gewählte ist zu sehen (erst wenn main.js bereit ist, sonst bleibt alles sichtbar) */
+.app.app-ready [data-tab]:not(.is-current){display:none}
+.app .ablauf,.app .branchen,.app .pakete,.app .referenzen{padding-top:48px}
+.app .referenzen+.kontakt{padding-top:56px}
+.app .section-head{margin-bottom:28px}
+.app .lane+.lane{margin-top:24px}
+.app .dock{display:none}
+
+/* Ablauf als ruhige Liste: kein stehendes Bild mehr, über das Text rutscht */
+.app .ablauf-stage{display:none}
+.app .ablauf-grid{display:block;padding-inline:var(--pad)}
+.app .steps{display:grid;gap:12px;padding:0}
+.app .step,.app .step:first-child,.app .step:last-child{display:block;min-height:0;padding:0}
+/* Schrittname bleibt in der Randspalte, senkrecht wie Filmrandschrift (keine Überzeile) */
+
+/* Leiste unten: drei Bereiche und „Anfragen“ als einzige Lime-Pill; der aktive Bereich trägt den Abspielkopf */
+.app .tabbar{
+  position:fixed;left:0;right:0;bottom:0;z-index:60;
+  display:grid;grid-template-columns:repeat(3,minmax(0,1fr)) auto;align-items:center;gap:2px;
+  height:calc(var(--tab-h) + env(safe-area-inset-bottom,0px));padding:0 12px env(safe-area-inset-bottom,0px) 8px;
+  background:rgba(10,10,10,.97);border-top:1px solid var(--line);
+}
+.tabbar a{
+  position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;min-height:52px;
+  font-weight:400;font-size:var(--fs-label);line-height:1;color:var(--bone-faint);text-decoration:none;transition:color .2s;
+}
+.tabbar a .i{width:20px;height:20px}
+.tabbar a[aria-current]{color:var(--bone)}
+.tabbar a[aria-current]::before{content:"";position:absolute;top:-6px;left:28%;right:28%;height:2px;border-radius:1px;background:var(--lime)}
+.tabbar .tab-cta{flex-direction:row;gap:8px;min-height:44px;padding:0 16px;border-radius:999px;background:var(--lime);color:var(--ink);font-size:var(--fs-ui)}
+.tabbar .tab-cta[aria-current]{color:var(--ink)}
+.tabbar .tab-cta[aria-current]::before{display:none}
+@media (hover:none){.tabbar a:active{color:var(--bone)}.tabbar .tab-cta:active{background:var(--lime-hover)}}
+
 /* ---------- Rechtliche Seiten ---------- */
 .legal{padding-block:clamp(48px,8vw,104px) var(--section-y)}
 .legal-body{max-width:46rem}

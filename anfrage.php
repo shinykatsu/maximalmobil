@@ -130,7 +130,7 @@ function render_page(int $status, array $payload): void
 <meta name="theme-color" content="#0a0a0a">
 <meta name="color-scheme" content="dark">
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="/css/style.css?v=2026-10-27a">
+<link rel="stylesheet" href="/css/style.css?v=2026-10-27c">
 </head>
 <body>
 <div class="bg" aria-hidden="true">

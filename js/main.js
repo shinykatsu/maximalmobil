@@ -522,6 +522,75 @@
     }).catch(() => {});
   }
 
+  /* ---------- Telefon als App: Leiste unten, ein Bereich nach dem anderen ----------
+     head.js setzt .app vor dem ersten Bild; hier kommen die Bereiche dazu. Ohne JavaScript bleibt alles untereinander. */
+  const appQuery = window.matchMedia('(max-width: 37.49em) and (min-height: 31.3em)');
+  const isHome = document.querySelector('[data-tabbar]') !== null;
+  const tabSections = [...document.querySelectorAll('[data-tab]')];
+  const tabLinks = [...document.querySelectorAll('[data-tab-link]')];
+  let currentTab = 'ablauf';
+  const tabOf = (el) => (el && el.closest ? el.closest('[data-tab]')?.dataset.tab : undefined);
+
+  const showTab = (name) => {
+    currentTab = name;
+    tabSections.forEach((sec) => sec.classList.toggle('is-current', sec.dataset.tab === name));
+    tabLinks.forEach((a) => {
+      if (a.dataset.tabLink === name) a.setAttribute('aria-current', 'true');
+      else a.removeAttribute('aria-current');
+    });
+  };
+
+  // Bereich zeigen und dorthin scrollen; aus der Leiste heraus bekommt die Überschrift den Fokus
+  const openTarget = (target, fromBar) => {
+    const name = tabOf(target);
+    if (!name) return false;
+    showTab(name);
+    const first = tabSections.find((sec) => sec.dataset.tab === name);
+    const el = target.matches('[data-tab]') ? first : target;
+    requestAnimationFrame(() => {
+      const top = el.getBoundingClientRect().top + window.scrollY - 8;
+      window.scrollTo({ top, behavior: motionOK() ? 'smooth' : 'auto' });
+      if (fromBar) {
+        const h = first.querySelector('h2');
+        if (h) { h.setAttribute('tabindex', '-1'); h.focus({ preventScroll: true }); }
+      }
+    });
+    return true;
+  };
+
+  const setApp = (on) => {
+    root.classList.toggle('app', on);
+    root.classList.toggle('app-ready', on);
+    if (on) showTab(currentTab);
+  };
+
+  if (isHome) {
+    setApp(appQuery.matches);
+    appQuery.addEventListener('change', (e) => setApp(e.matches));
+
+    document.addEventListener('click', (e) => {
+      if (!root.classList.contains('app')) return;
+      const a = e.target.closest('a[href*="#"]');
+      if (!a) return;
+      const url = new URL(a.href, window.location.href);
+      if (url.pathname !== window.location.pathname || !url.hash) return;
+      const target = document.getElementById(decodeURIComponent(url.hash.slice(1)));
+      if (!target || !tabOf(target)) return;          // z. B. #top: normal scrollen
+      e.preventDefault();
+      history.replaceState(null, '', url.hash);
+      openTarget(target, Boolean(a.closest('[data-tabbar]')));
+    });
+
+    // Mit Anker geladen (z. B. /#kontakt von Impressum oder Datenschutz): passenden Bereich öffnen
+    const fromHash = () => {
+      if (!root.classList.contains('app') || !window.location.hash) return;
+      const target = document.getElementById(decodeURIComponent(window.location.hash.slice(1)));
+      if (target && tabOf(target)) openTarget(target, false);
+    };
+    window.addEventListener('hashchange', fromHash);
+    fromHash();
+  }
+
   /* ---------- Freigabe-Beispiel ---------- */
   const approveBox = document.querySelector('[data-approve]');
   const approveBtn = document.querySelector('[data-approve-btn]');

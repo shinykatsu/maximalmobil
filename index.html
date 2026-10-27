@@ -17,8 +17,8 @@
 <link rel="preload" href="/assets/fonts/syne-800.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="/assets/fonts/outfit-300.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="/assets/fonts/outfit-400.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="stylesheet" href="/css/style.css?v=2026-10-27a">
-<script src="/js/head.js?v=2026-10-27a"></script>
+<link rel="stylesheet" href="/css/style.css?v=2026-10-27c">
+<script src="/js/head.js?v=2026-10-27c"></script>
 </head>
 <body>
 
@@ -26,6 +26,9 @@
   <symbol id="i-arrow" viewBox="0 0 20 20"><path d="M4 10h11.5M11 5.5 15.5 10 11 14.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></symbol>
   <symbol id="i-phone" viewBox="0 0 20 20"><path d="M7.4 3.6 5 3.4a1.3 1.3 0 0 0-1.4 1.4c.4 6 5.3 10.9 11.3 11.3a1.3 1.3 0 0 0 1.4-1.4l-.2-2.4-3.2-1.1-1.6 1.6a9.4 9.4 0 0 1-4.6-4.6l1.6-1.6z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></symbol>
   <symbol id="i-mail" viewBox="0 0 20 20"><rect x="2.8" y="4.8" width="14.4" height="10.4" rx="1.6" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="m3.6 6.2 6.4 4.9 6.4-4.9" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-steps" viewBox="0 0 20 20"><path d="M3.5 5h2M3.5 10h2M3.5 15h2M8.5 5h8M8.5 10h8M8.5 15h8" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></symbol>
+  <symbol id="i-lanes" viewBox="0 0 20 20"><rect x="3" y="3.5" width="5.6" height="13" rx="1.6" fill="none" stroke="currentColor" stroke-width="1.5"/><rect x="11.4" y="3.5" width="5.6" height="13" rx="1.6" fill="none" stroke="currentColor" stroke-width="1.5"/></symbol>
+  <symbol id="i-month" viewBox="0 0 20 20"><rect x="3" y="4.6" width="14" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M3 8.6h14M7 2.8v3.4M13 2.8v3.4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></symbol>
   <symbol id="i-out" viewBox="0 0 20 20"><path d="M6.5 13.5 13.5 6.5M8 6.5h5.5V12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></symbol>
 </svg>
 
@@ -46,6 +49,7 @@
     <a href="#pakete">Pakete</a>
   </nav>
   <a class="btn btn-primary btn-sm" href="#kontakt"><span class="cta-long">Erstgespräch anfragen</span><span class="cta-short">Anfragen</span></a>
+  <a class="head-call" href="tel:+491736386145"><svg class="i" aria-hidden="true"><use href="#i-phone"/></svg>Anrufen</a>
 </header>
 
 <main id="inhalt">
@@ -132,7 +136,7 @@
   </section>
 
   <!-- ============ Ablauf: fünf Clips ============ -->
-  <section class="ablauf" id="ablauf" aria-labelledby="ablauf-title">
+  <section class="ablauf is-current" id="ablauf" data-tab="ablauf" aria-labelledby="ablauf-title">
     <div class="wrap section-head">
       <h2 class="h2" id="ablauf-title"><span>Fünf Schritte.</span> <span class="accent">Ein Ansprech&shy;partner.</span></h2>
       <p class="section-lead">Vom Erstgespräch bis zum Report. Ab Schritt 2 wiederholt sich der Ablauf jeden Monat.</p>
@@ -239,7 +243,7 @@
   </section>
 
   <!-- ============ Branchen ============ -->
-  <section class="branchen" id="branchen" aria-labelledby="branchen-title">
+  <section class="branchen" id="branchen" data-tab="branchen" aria-labelledby="branchen-title">
     <div class="wrap section-head">
       <h2 class="h2" id="branchen-title"><span>Zwei Branchen.</span> <span class="accent">Klar begrenzt.</span></h2>
     </div>
@@ -276,7 +280,7 @@
   </section>
 
   <!-- ============ Pakete ============ -->
-  <section class="pakete" id="pakete" aria-labelledby="pakete-title">
+  <section class="pakete" id="pakete" data-tab="pakete" aria-labelledby="pakete-title">
     <div class="wrap section-head">
       <h2 class="h2" id="pakete-title"><span>Drei Pakete.</span> <span class="accent">Monat für Monat.</span></h2>
       <p class="section-lead">Jede Zeile zeigt einen beispielhaften Monat. Sie wählen zwischen sechs Monaten Laufzeit und monatlich kündbar. Die Preise nennen wir Ihnen im Erstgespräch.</p>
@@ -357,14 +361,14 @@
   </section>
 
   <!-- ============ Referenzen ============ -->
-  <section class="referenzen" id="referenzen" aria-labelledby="ref-title">
+  <section class="referenzen" id="referenzen" data-tab="anfrage" aria-labelledby="ref-title">
     <div class="wrap ref-grid">
       <h2 class="ref-statement" id="ref-title">Unsere eigene Instagram-Seite im Automobil&shy;bereich hat über <span class="accent">60.000</span> Follower.</h2>
     </div>
   </section>
 
   <!-- ============ Kontakt ============ -->
-  <section class="kontakt" id="kontakt" aria-labelledby="kontakt-title">
+  <section class="kontakt" id="kontakt" data-tab="anfrage" aria-labelledby="kontakt-title">
     <div class="wrap kontakt-grid">
       <div class="kontakt-intro">
         <h2 class="h2" id="kontakt-title"><span>Erst&shy;gespräch</span> <span class="accent">anfragen.</span></h2>
@@ -448,6 +452,13 @@
   </div>
 </footer>
 
+<nav class="tabbar" aria-label="Bereiche" data-tabbar>
+  <a href="#ablauf" data-tab-link="ablauf" aria-current="true"><svg class="i" aria-hidden="true"><use href="#i-steps"/></svg><span>Ablauf</span></a>
+  <a href="#branchen" data-tab-link="branchen"><svg class="i" aria-hidden="true"><use href="#i-lanes"/></svg><span>Branchen</span></a>
+  <a href="#pakete" data-tab-link="pakete"><svg class="i" aria-hidden="true"><use href="#i-month"/></svg><span>Pakete</span></a>
+  <a href="#kontakt" data-tab-link="anfrage" class="tab-cta"><span>Anfragen</span><svg class="i" aria-hidden="true"><use href="#i-arrow"/></svg></a>
+</nav>
+
 <nav class="dock" aria-label="Ablauf, Schnellnavigation" data-dock inert>
   <span class="tc dock-tc" data-tc="scrub" aria-hidden="true">00:00:00:00</span>
   <ol class="dock-clips">
@@ -461,6 +472,6 @@
   <a class="btn btn-primary btn-sm dock-cta" href="#kontakt"><span class="cta-long">Erstgespräch anfragen</span><span class="cta-short">Anfragen</span></a>
 </nav>
 
-<script src="/js/main.js?v=2026-10-27a" defer></script>
+<script src="/js/main.js?v=2026-10-27c" defer></script>
 </body>
 </html>
