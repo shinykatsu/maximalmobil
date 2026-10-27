@@ -26,6 +26,8 @@ Options -Indexes
 # Dateitypen und Zeichensatz
 AddType font/woff2 .woff2
 AddType image/svg+xml .svg
+AddType video/mp4 .mp4
+AddType video/webm .webm
 AddDefaultCharset utf-8
 AddCharset utf-8 .css .js .svg
 
@@ -41,7 +43,7 @@ AddCharset utf-8 .css .js .svg
 </IfModule>
 
 # Caching: HTML immer frisch, CSS/JS ein Jahr (beim Ändern ?v= in den Seiten erhöhen),
-# Schriften ein Jahr, Bilder einen Monat
+# Schriften ein Jahr, Bilder und Videos einen Monat (geänderten Clip unter neuem Namen ablegen)
 <IfModule mod_expires.c>
   ExpiresActive On
   ExpiresDefault "access plus 1 hour"
@@ -52,6 +54,9 @@ AddCharset utf-8 .css .js .svg
   ExpiresByType font/woff2 "access plus 1 year"
   ExpiresByType image/svg+xml "access plus 1 month"
   ExpiresByType image/png "access plus 1 month"
+  ExpiresByType image/jpeg "access plus 1 month"
+  ExpiresByType video/mp4 "access plus 1 month"
+  ExpiresByType video/webm "access plus 1 month"
 </IfModule>
 
 # Kompression für Text-Dateien (woff2 ist schon komprimiert)

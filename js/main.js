@@ -33,6 +33,7 @@
 
   /* ---------- Klappe ---------- */
   const monitors = [...document.querySelectorAll('.monitor')];
+  const videoPlayers = [];   // Echte Clips, siehe unten
   const clap = (m) => {
     if (!m || !motionOK()) return;
     m.classList.remove('is-clap');
@@ -92,6 +93,7 @@
     placeThumb();
     switchable.forEach((el) => swapText(el, b ? el.dataset[b] : el.dataset.none));
     if (source !== 'form') formBranche.forEach((r) => { r.checked = Boolean(b) && r.value === LABEL[b]; });
+    if (changed) videoPlayers.forEach((p) => p.setFilter(b));
     if (changed && source !== 'reset') {
       take += 1;
       takes.forEach((el) => swapText(el, String(take)));
@@ -232,6 +234,7 @@
 
   /* ---------- Intro: Clips legen sich auf die Zeitleiste, dann schlägt die Klappe ---------- */
   const heroMonitor = document.querySelector('.monitor-hero');
+  const introUntil = root.classList.contains('intro') ? performance.now() + 1650 : 0;
   if (root.classList.contains('intro')) {
     requestAnimationFrame(() => requestAnimationFrame(() => root.classList.remove('intro')));
     // Der Timecode startet im Moment, in dem die Klappe zuschlägt (24 % von 720 ms)
@@ -244,6 +247,279 @@
   if ('IntersectionObserver' in window) {
     const offscreen = new IntersectionObserver((entries) => entries.forEach((e) => e.target.classList.toggle('is-off', !e.isIntersecting)));
     monitors.forEach((m) => offscreen.observe(m));
+  }
+
+  /* ---------- Echte Clips in den Monitoren ----------
+     Liste aus /assets/videos/videos.json, je Monitor eigene zufällige Reihenfolge (Fisher-Yates).
+     Zwei Videos pro Monitor: das nächste lädt unsichtbar vor und blendet in 250 ms über.
+     Spielt nur sichtbar; bei „weniger Bewegung“ oder Datensparmodus nur ein Standbild.
+     Lässt sich ein Clip nicht laden, kommt der nächste; klappt keiner, bleibt die Klappe. */
+  const VIDEO_DIR = '/assets/videos/';
+  const pauseButtons = [...document.querySelectorAll('[data-video-pause]')];
+  let videosPaused = false;
+  const saveData = Boolean(navigator.connection && navigator.connection.saveData);
+  const shuffle = (arr) => {
+    const a = arr.slice();
+    for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
+    return a;
+  };
+  const forBranche = (clips, b) => clips.filter((c) => !b || c.branche === b || c.branche === 'alle');
+
+  const updatePauseUI = () => {
+    pauseButtons.forEach((btn) => {
+      const p = videoPlayers.find((x) => x.fig.contains(btn));
+      btn.hidden = !(p && p.isActive());
+      btn.firstChild.textContent = videosPaused ? 'Abspielen' : 'Pause';
+    });
+  };
+  pauseButtons.forEach((btn) => btn.addEventListener('click', () => {
+    videosPaused = !videosPaused;
+    videoPlayers.forEach((p) => p.sync());
+    updatePauseUI();
+  }));
+
+  const createPlayer = (fig, clips) => {
+    const box = fig.querySelector('.m-media');
+    const first = box && box.querySelector('.m-video');
+    if (!first) return null;
+    const second = document.createElement('video');
+    second.className = 'm-video';
+    box.appendChild(second);
+    [first, second].forEach((v) => {
+      v.muted = true; v.defaultMuted = true; v.playsInline = true;
+      v.setAttribute('muted', ''); v.setAttribute('playsinline', '');
+      v.disablePictureInPicture = true;
+    });
+    const canWebm = first.canPlayType('video/webm; codecs="vp9"') === 'probably';
+    const kind = fig.dataset.player;
+
+    let front = first;
+    let back = second;
+    const broken = new Set();  // Clips, die sich nicht laden ließen: werden nicht mehr gewählt
+    const usable = (b) => forBranche(clips, b).filter((c) => !broken.has(c.name));
+    let list = usable(current);
+    let queue = [];
+    let shown = '';        // Clip, der gerade zu sehen ist
+    let last = '';         // zuletzt gespielter Clip
+    let pending = null;    // im hinteren Video vorgeladener Clip
+    let mode = !motionOK() || saveData ? 'poster' : 'video';
+    let visible = false;
+    let stage = false;     // oben: nach der Klappe; im Ablauf: ab Schritt 3
+    let started = false;
+    let busy = false;
+    let fails = 0;
+
+    const self = {};
+    const other = () => videoPlayers.find((p) => p !== self);
+
+    const pick = () => {
+      if (!list.length) return null;
+      if (list.length === 1) return list[0];
+      if (!queue.length) {
+        queue = shuffle(list);
+        // nach dem Neumischen nie mit dem zuletzt gespielten Clip anfangen
+        if (queue[0].name === last) {
+          const k = 1 + Math.floor(Math.random() * (queue.length - 1));
+          [queue[0], queue[k]] = [queue[k], queue[0]];
+        }
+      }
+      const avoid = other()?.shown;
+      let i = queue.findIndex((c) => c.name !== shown && c.name !== avoid);
+      if (i < 0) i = queue.findIndex((c) => c.name !== shown);
+      if (i < 0) i = 0;
+      return queue.splice(i, 1)[0];
+    };
+
+    const markBroken = (name) => {
+      broken.add(name);
+      list = list.filter((c) => c.name !== name);
+      queue = queue.filter((c) => c.name !== name);
+      if (pending && pending.name === name) pending = null;
+    };
+
+    const srcFor = (clip, ext) => `${VIDEO_DIR}${clip.name}.${ext}`;
+    const assign = (v, clip) => {
+      if (v._clip === clip.name && !v._failed) return;
+      v._clip = clip.name;
+      v._failed = false;
+      v._ext = canWebm ? 'webm' : 'mp4';
+      v.preload = 'auto';
+      v.src = srcFor(clip, v._ext);
+      v.load();
+    };
+
+    // Startet den Clip im (unsichtbaren) Video; erfüllt sich, sobald wirklich Bild läuft
+    const startOn = (v, clip) => new Promise((resolve, reject) => {
+      assign(v, clip);
+      if (v._failed) { reject(new Error('load')); return; }
+      let timer = 0;
+      const cleanup = () => { clearTimeout(timer); v.removeEventListener('playing', onPlaying); v._fail = null; };
+      const onPlaying = () => { cleanup(); resolve(); };
+      v._fail = () => { cleanup(); reject(new Error('load')); };   // ruft der Fehler-Listener unten
+      v.addEventListener('playing', onPlaying);
+      timer = setTimeout(() => { cleanup(); reject(new Error('timeout')); }, 8000);
+      try { v.currentTime = 0; } catch (e) { /* noch keine Metadaten */ }
+      v.play().catch((err) => { if (err && err.name === 'NotAllowedError') { cleanup(); reject(err); } });
+    });
+
+    const preloadNext = () => {
+      if (mode !== 'video' || list.length < 2) { pending = null; return; }
+      pending = pick();
+      if (pending) assign(back, pending);
+    };
+
+    const hide = () => {
+      [first, second].forEach((v) => { v.classList.remove('is-on'); v.pause(); });
+      fig.classList.remove('has-media');
+      shown = '';
+      started = false;
+      updatePauseUI();
+    };
+
+    const showPoster = () => {
+      const avoid = other()?.shown;
+      const pool = list.filter((c) => c.name !== avoid);
+      const clip = (pool.length ? pool : list)[Math.floor(Math.random() * (pool.length || list.length))];
+      if (!clip) { hide(); return; }
+      front.poster = `${VIDEO_DIR}${clip.name}.jpg`;
+      front.classList.add('is-on');
+      fig.classList.add('has-media');
+      shown = clip.name;
+      started = true;
+    };
+
+    const playNext = async () => {
+      if (busy || mode !== 'video') return;
+      let clip = pending && list.some((c) => c.name === pending.name) ? pending : null;
+      if (clip && clip.name === other()?.shown && list.length > 2) { queue.unshift(clip); clip = null; }
+      if (!clip) clip = pick();
+      pending = null;
+      if (!clip) { hide(); return; }
+
+      // nur ein Clip in der Auswahl: einfach von vorn
+      if (clip.name === shown) {
+        front.currentTime = 0;
+        front.play().catch(() => {});
+        return;
+      }
+      busy = true;
+      const next = back;
+      try {
+        await startOn(next, clip);
+        if (!shouldPlay()) next.pause();
+        next.classList.add('is-on');
+        front.classList.remove('is-on');
+        const old = front;
+        setTimeout(() => old.pause(), 300);
+        front = next;
+        back = old;
+        shown = clip.name;
+        last = clip.name;
+        started = true;
+        fails = 0;
+        fig.classList.add('has-media');
+        updatePauseUI();
+        busy = false;
+        setTimeout(preloadNext, 400);
+      } catch (err) {
+        busy = false;
+        if (err && err.name === 'NotAllowedError') {
+          // Browser verbietet Autoplay (z. B. Stromsparmodus): Standbild statt Video
+          next._clip = '';
+          mode = 'poster';
+          showPoster();
+          updatePauseUI();
+          return;
+        }
+        // Ladefehler: Clip ist schon aussortiert. Zeitüberschreitung (langsames Netz): Clip bleibt in der Liste
+        if (err && err.message === 'timeout') { next._clip = ''; fails += 1; }
+        if (!list.length || fails > list.length) { mode = 'off'; hide(); return; }
+        playNext();
+      }
+    };
+
+    const shouldPlay = () => mode === 'video' && visible && stage && !videosPaused && !document.hidden && list.length > 0;
+
+    const sync = () => {
+      if (mode === 'poster') { if (visible && !started && list.length) showPoster(); return; }
+      if (mode !== 'video') return;
+      if (shouldPlay()) {
+        if (!started) { playNext(); return; }
+        if (front.paused && !busy) front.play().catch(() => {});
+      } else if (!front.paused) {
+        front.pause();
+      }
+    };
+
+    [first, second].forEach((v) => {
+      v.addEventListener('ended', () => { if (v === front) playNext(); });
+      // Ein Fehler-Listener für alle Fälle: erst WebM -> MP4 versuchen, dann Clip aussortieren
+      v.addEventListener('error', () => {
+        const name = v._clip;
+        if (!name) return;
+        if (v._ext === 'webm') {
+          v._ext = 'mp4';
+          v.src = `${VIDEO_DIR}${name}.mp4`;
+          v.load();
+          if (v._fail) v.play().catch(() => {});
+          return;
+        }
+        v._failed = true;
+        markBroken(name);
+        if (v._fail) { v._fail(); return; }               // startOn wartet: dort geht es weiter
+        if (v === front && started && !busy) {            // Fehler mitten im laufenden Clip
+          if (list.length) playNext(); else { mode = 'off'; hide(); }
+        }
+      });
+    });
+
+    Object.assign(self, {
+      fig, kind,
+      get shown() { return shown; },
+      isActive: () => mode === 'video' && started,
+      sync,
+      setVisible(on) { visible = on; sync(); },
+      setStage(on) { if (stage === on) return; stage = on; sync(); },
+      setFilter(b) {
+        list = usable(b);
+        queue = [];
+        pending = null;
+        if (mode === 'poster') { if (started) { if (list.length) showPoster(); else hide(); } return; }
+        if (mode !== 'video') return;
+        if (!list.length) { hide(); return; }
+        if (started && !list.some((c) => c.name === shown)) {
+          if (shouldPlay()) playNext(); else hide();
+          return;
+        }
+        if (started) preloadNext();
+        sync();
+      },
+    });
+    return self;
+  };
+
+  const playerFigs = [...document.querySelectorAll('[data-player]')];
+  if (playerFigs.length && 'IntersectionObserver' in window && window.fetch) {
+    fetch(`${VIDEO_DIR}videos.json`).then((r) => (r.ok ? r.json() : [])).then((data) => {
+      const clips = (Array.isArray(data) ? data : [])
+        .filter((c) => c && typeof c.name === 'string' && /^[a-z0-9-]+$/.test(c.name))
+        .map((c) => ({ name: c.name, branche: c.branche === 'auto' || c.branche === 'immo' ? c.branche : 'alle' }));
+      if (!clips.length) return;
+      playerFigs.forEach((fig) => { const p = createPlayer(fig, clips); if (p) videoPlayers.push(p); });
+      const seen = new IntersectionObserver((entries) => entries.forEach((e) => {
+        const p = videoPlayers.find((x) => x.fig === e.target);
+        if (p) p.setVisible(e.isIntersecting && e.intersectionRatio >= 0.2);
+      }), { threshold: [0, 0.2, 0.5] });
+      videoPlayers.forEach((p) => seen.observe(p.fig));
+      document.addEventListener('visibilitychange', () => videoPlayers.forEach((p) => p.sync()));
+      videoPlayers.forEach((p) => {
+        if (p.kind === 'steps') p.setStage(true);   // im Ablauf läuft das Video in jedem Schritt
+        else {
+          // oben erst nach dem Schlag der Klappe (Intro), sonst sofort
+          setTimeout(() => p.setStage(true), Math.max(0, introUntil - performance.now()));
+        }
+      });
+    }).catch(() => {});
   }
 
   /* ---------- Freigabe-Beispiel ---------- */

@@ -210,7 +210,7 @@ strong{font-weight:400;color:var(--bone)}
   background:linear-gradient(180deg,#151513,#0e0e0d);
   container-type:size;
 }
-.mon-caption{display:flex;justify-content:space-between;gap:12px;font-weight:400;font-size:var(--fs-label);color:var(--bone-faint)}
+.mon-caption{display:flex;align-items:center;justify-content:space-between;gap:12px;font-weight:400;font-size:var(--fs-label);color:var(--bone-faint)}
 .mon-caption .tc{color:var(--bone)}
 .rec-tc{display:inline-flex;align-items:center;gap:7px;letter-spacing:.06em;color:var(--bone-faint)}
 .rec-tc .rec-dot{width:7px;height:7px}
@@ -228,7 +228,27 @@ strong{font-weight:400;color:var(--bone)}
     linear-gradient(var(--c),var(--c)) bottom right/5cqw 1px no-repeat,
     linear-gradient(var(--c),var(--c)) bottom right/1px 5cqw no-repeat;
 }
-.m-ph{position:absolute;left:7%;bottom:6.5%;font-weight:400;font-size:max(10px,3.4cqw);letter-spacing:.14em;text-transform:uppercase;color:var(--bone-faint)}
+/* Echte Clips: zwei Videos pro Monitor, das nächste lädt unsichtbar vor und blendet in 250 ms über */
+.m-media{position:absolute;inset:0;pointer-events:none}
+.m-video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:0;transition:opacity .25s linear}
+.m-video.is-on{opacity:1}
+/* leichter Verlauf oben und unten, damit Einblendungen über hellen Bildern lesbar bleiben */
+.m-media::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(10,10,10,.62),rgba(10,10,10,0) 28%,rgba(10,10,10,0) 64%,rgba(10,10,10,.55));opacity:0;transition:opacity .25s linear}
+.has-media .m-media::after{opacity:1}
+/* Läuft ein Video, zeigt der Ablauf-Monitor es in jedem Schritt: Material sichtbar, Klappe in der Ecke,
+   keine Contentplan-Karte und keine Themenzeile darüber */
+.monitor.monitor-steps.has-media .m-material{opacity:1}
+.monitor.monitor-steps.has-media .m-slate{transform:translateY(-50%) translate(-3cqw,27cqw) scale(.36)}
+.monitor.monitor-steps.has-media .m-plan{opacity:0}
+/* Wie beim echten Take: nach der Klappe rückt sie in die Ecke und das Bild läuft */
+.monitor-hero.has-media .m-slate{transform:translateY(-50%) translate(-3cqw,27cqw) scale(.36)}
+
+/* Videos anhalten (WCAG 2.2.2) */
+.mon-pause,.m-pause{display:inline-flex;align-items:center;min-height:44px;padding:0;border:0;background:none;font:inherit;font-weight:400;cursor:pointer;transition:color .2s}
+.mon-pause{margin-block:-11px;font-size:var(--fs-label);letter-spacing:.06em;color:var(--bone-faint)}
+.m-pause{position:absolute;left:7%;bottom:4.5%;font-size:max(10px,3.4cqw);letter-spacing:.14em;text-transform:uppercase;color:var(--bone)}
+.mon-pause[hidden],.m-pause[hidden]{display:none}
+@media (hover:hover){.mon-pause:hover,.m-pause:hover{color:var(--lime)}}
 
 /* Klappe */
 .m-slate{position:absolute;left:10%;right:10%;top:50%;transform:translateY(-50%);transform-origin:0 100%;transition:opacity .45s var(--ease),transform .8s var(--ease-expo)}
@@ -256,7 +276,6 @@ strong{font-weight:400;color:var(--bone)}
     linear-gradient(180deg,#1a1a17,#0c0c0b);
   transition:opacity .6s var(--ease);
 }
-.m-note{text-align:center;font-weight:400;font-size:max(12px,4.6cqw);line-height:1.45;color:var(--bone-dim);max-width:24ch}
 .m-rec{position:absolute;top:5.5%;right:7%;display:flex;align-items:center;gap:1.8cqw;font-weight:400;font-size:max(10px,3.6cqw);letter-spacing:.14em;color:var(--bone);transition:opacity .3s}
 .rec-dot{width:2.4cqw;height:2.4cqw;border-radius:50%;background:var(--lime)}
 @media (prefers-reduced-motion:no-preference){
@@ -303,9 +322,6 @@ strong{font-weight:400;color:var(--bone)}
 .monitor-steps.s3:not(.s4) .m-rec{opacity:1}
 .monitor-steps:not(.s4) .m-subs,.monitor-steps:not(.s4) .m-status{opacity:0;clip-path:inset(0 100% 0 0)}
 .monitor-steps:not(.s5) .m-online{opacity:0}
-.monitor-steps.s3 .m-note{opacity:.9}
-.monitor-steps.s4 .m-note{opacity:0}
-.m-note{transition:opacity .4s}
 /* Sehr schmaler Monitor (Handy quer): die Format-Plakette weicht dem Freigabe-Status */
 @container (max-width:200px){
   .m-format{display:none}
@@ -689,6 +705,7 @@ html.dock-on{scroll-padding-bottom:calc(var(--dock-h) + 16px)}
   .ablauf-stage{grid-column:1;grid-row:1;position:sticky;top:0;height:100svh;display:flex;justify-content:center;align-items:flex-start;padding-top:10px}
   .monitor-steps{position:static}
   .monitor-steps .mon-screen{height:min(calc(100svh - 20px),calc((100vw - 20px) * 16 / 9))}
+  .m-pause{bottom:max(4.5%,calc(100% + 18px + var(--dock-h) - 100svh))}
   .steps{grid-column:1;grid-row:1;position:relative;z-index:1;padding:58svh 12px 0}
   .step{min-height:140svh;display:flex;flex-direction:column;justify-content:flex-end;padding-bottom:calc(var(--dock-h) + 20px);border-top:0}
   .step:last-child{min-height:120svh}
@@ -779,6 +796,7 @@ html.dock-on{scroll-padding-bottom:calc(var(--dock-h) + 16px)}
   .ablauf-grid{grid-template-columns:auto minmax(0,1fr);column-gap:clamp(16px,3vw,32px);padding-inline:var(--pad)}
   .ablauf-stage{grid-column:1;justify-content:flex-start;padding-top:12px}
   .monitor-steps .mon-screen{height:calc(100svh - var(--dock-h) - 24px)}
+  .m-pause{bottom:4.5%}
   .steps{grid-column:2;padding:0}
   .step,.step:first-child,.step:last-child{min-height:100svh;justify-content:center;padding-block:12px calc(var(--dock-h) + 12px)}
   .monitor-steps .m-subs{top:58%}

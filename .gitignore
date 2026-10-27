@@ -1,0 +1,8 @@
+# Alte Coming-soon-Seite: gehört nicht zur Website
+index.html.html
+
+# Systemdateien
+.DS_Store
+._*
+Thumbs.db
+desktop.ini

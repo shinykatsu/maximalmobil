@@ -17,8 +17,8 @@
 <link rel="preload" href="/assets/fonts/syne-800.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="/assets/fonts/outfit-300.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="/assets/fonts/outfit-400.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="stylesheet" href="/css/style.css?v=2026-10-22e">
-<script src="/js/head.js?v=2026-10-22e"></script>
+<link rel="stylesheet" href="/css/style.css?v=2026-10-27a">
+<script src="/js/head.js?v=2026-10-27a"></script>
 </head>
 <body>
 
@@ -75,8 +75,14 @@
         </div>
       </div>
 
-      <figure class="monitor monitor-hero s1" aria-label="Vorschau eines Reels im Format 9:16, Platzhalter">
+      <figure class="monitor monitor-hero s1" aria-label="Reels aus unseren Drehs im Format 9:16" data-player="hero">
         <div class="mon-screen">
+          <div class="m-media" aria-hidden="true">
+            <video class="m-video" muted playsinline preload="none">
+              <source src="/assets/videos/auto-lotus.webm" type="video/webm">
+              <source src="/assets/videos/auto-lotus.mp4" type="video/mp4">
+            </video>
+          </div>
           <div class="m-slate">
             <div class="slate-sticks" aria-hidden="true"><span class="stick stick-top"></span><span class="stick"></span></div>
             <dl class="slate-body">
@@ -91,7 +97,7 @@
         </div>
         <figcaption class="mon-caption">
           <span class="rec-tc" aria-hidden="true"><span class="rec-dot"></span>REC <span class="tc" data-tc="live">00:00:00:00</span></span>
-          <span>Platzhalter · Beispielvideo folgt</span>
+          <button class="mon-pause" type="button" data-video-pause hidden>Pause<span class="sr-only"> (Videos)</span></button>
         </figcaption>
       </figure>
     </div>
@@ -134,12 +140,16 @@
 
     <div class="wrap ablauf-grid">
       <div class="ablauf-stage">
-        <figure class="monitor monitor-steps s1 s2 s3 s4 s5" data-monitor aria-label="Ein Reel entsteht, Platzhalter">
+        <figure class="monitor monitor-steps s1 s2 s3 s4 s5" data-monitor data-player="steps" aria-label="Ein Reel entsteht">
           <div class="mon-screen">
             <div class="m-material" aria-hidden="true">
-              <!-- Später: <video class="m-video" src="…" muted playsinline loop preload="none" poster="…"></video> -->
+              <div class="m-media" aria-hidden="true">
+                <video class="m-video" muted playsinline preload="none">
+                  <source src="/assets/videos/auto-rx7-japan.webm" type="video/webm">
+                  <source src="/assets/videos/auto-rx7-japan.mp4" type="video/mp4">
+                </video>
+              </div>
               <span class="m-rec"><span class="rec-dot"></span>REC</span>
-              <span class="m-note">Hier läuft bald ein echtes Beispielvideo.</span>
             </div>
             <div class="m-slate" aria-hidden="true">
               <div class="slate-sticks"><span class="stick stick-top"></span><span class="stick"></span></div>
@@ -151,7 +161,7 @@
               </dl>
             </div>
             <span class="m-corners" aria-hidden="true"></span>
-          <span class="m-ph" aria-hidden="true">Platzhalter</span>
+            <button class="m-pause" type="button" data-video-pause hidden>Pause<span class="sr-only"> (Videos)</span></button>
             <span class="tag m-format">Reel · 9:16</span>
             <div class="m-plan">
               <span class="m-plan-label">Contentplan</span>
@@ -451,6 +461,6 @@
   <a class="btn btn-primary btn-sm dock-cta" href="#kontakt"><span class="cta-long">Erstgespräch anfragen</span><span class="cta-short">Anfragen</span></a>
 </nav>
 
-<script src="/js/main.js?v=2026-10-22e" defer></script>
+<script src="/js/main.js?v=2026-10-27a" defer></script>
 </body>
 </html>
