@@ -121,16 +121,17 @@ function render_page(int $status, array $payload): void
     }
 
     echo '<!doctype html>
-<html lang="de">
+<html lang="de" class="no-js">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>' . h($title) . ' – maximalmobil</title>
 <meta name="robots" content="noindex">
 <meta name="theme-color" content="#0a0a0a">
-<meta name="color-scheme" content="dark">
+<meta name="color-scheme" content="dark light">
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="/css/style.css?v=2026-10-27c">
+<link rel="stylesheet" href="/css/style.css?v=2026-10-27g">
+<script src="/js/head.js?v=2026-10-27g"></script>
 </head>
 <body>
 <div class="bg" aria-hidden="true">
@@ -138,7 +139,8 @@ function render_page(int $status, array $payload): void
   <div class="bg-rule"></div>
 </div>
 <header class="site-head wrap">
-  <a class="brand" href="/" aria-label="maximalmobil, zur Startseite"><img src="/assets/logo/wortmarke.svg" alt="" width="190" height="18"></a>
+  <a class="brand" href="/" aria-label="maximalmobil, zur Startseite"><img class="logo-dark" src="/assets/logo/wortmarke.svg" alt="" width="190" height="18"><img class="logo-light" src="/assets/logo/wortmarke-hell.svg" alt="" width="190" height="18"></a>
+  <button class="theme-toggle" type="button" data-theme-toggle aria-pressed="false" aria-label="Helles Design"><svg class="t-sun" viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="3.6" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M10 2.4v1.9M10 15.7v1.9M2.4 10h1.9M15.7 10h1.9M4.6 4.6 6 6M14 14l1.4 1.4M4.6 15.4 6 14M14 6l1.4-1.4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg><svg class="t-moon" viewBox="0 0 20 20" aria-hidden="true"><path d="M15.8 12.3A6.5 6.5 0 0 1 7.7 4.2a6.5 6.5 0 1 0 8.1 8.1z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg></button>
 </header>
 <main class="legal wrap">
   <article class="legal-body">
@@ -150,7 +152,7 @@ function render_page(int $status, array $payload): void
 <footer class="site-foot">
   <div class="wrap foot-grid">
     <div class="foot-brand">
-      <img src="/assets/logo/wortmarke.svg" alt="maximalmobil" width="160" height="15">
+      <img class="logo-dark" src="/assets/logo/wortmarke.svg" alt="maximalmobil" width="160" height="15"><img class="logo-light" src="/assets/logo/wortmarke-hell.svg" alt="maximalmobil" width="160" height="15">
       <p>Social Media Agentur für Automobil und Immobilien</p>
     </div>
     <nav class="foot-nav" aria-label="Rechtliches">
