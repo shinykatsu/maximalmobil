@@ -17,8 +17,8 @@
 <link rel="preload" href="/assets/fonts/syne-800.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="/assets/fonts/outfit-300.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="/assets/fonts/outfit-400.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="stylesheet" href="/css/style.css?v=2026-10-27i">
-<script src="/js/head.js?v=2026-10-27i"></script>
+<link rel="stylesheet" href="/css/style.css?v=2026-10-28b">
+<script src="/js/head.js?v=2026-10-28b"></script>
 </head>
 <body>
 
@@ -29,6 +29,7 @@
   <symbol id="i-steps" viewBox="0 0 20 20"><path d="M3.5 5h2M3.5 10h2M3.5 15h2M8.5 5h8M8.5 10h8M8.5 15h8" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></symbol>
   <symbol id="i-lanes" viewBox="0 0 20 20"><rect x="3" y="3.5" width="5.6" height="13" rx="1.6" fill="none" stroke="currentColor" stroke-width="1.5"/><rect x="11.4" y="3.5" width="5.6" height="13" rx="1.6" fill="none" stroke="currentColor" stroke-width="1.5"/></symbol>
   <symbol id="i-month" viewBox="0 0 20 20"><rect x="3" y="4.6" width="14" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M3 8.6h14M7 2.8v3.4M13 2.8v3.4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></symbol>
+  <symbol id="i-close" viewBox="0 0 20 20"><path d="m5.5 5.5 9 9M14.5 5.5l-9 9" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></symbol>
   <symbol id="i-out" viewBox="0 0 20 20"><path d="M6.5 13.5 13.5 6.5M8 6.5h5.5V12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></symbol>
 </svg>
 
@@ -96,8 +97,8 @@
               <source src="/assets/videos/auto-lotus.mp4" type="video/mp4">
             </video>
           </div>
-          <div class="m-slate">
-            <div class="slate-sticks" aria-hidden="true"><span class="stick stick-top"></span><span class="stick"></span></div>
+          <div class="m-slate" aria-hidden="true">
+            <div class="slate-sticks"><span class="stick stick-top"></span><span class="stick"></span></div>
             <dl class="slate-body">
               <div class="slate-cell slate-wide"><dt>Produktion</dt><dd>maximalmobil</dd></div>
               <div class="slate-cell slate-wide"><dt>Szene</dt><dd data-auto="Autohaus · Werkstatt" data-immo="Objekt · Baustelle">Ihr Betrieb</dd></div>
@@ -110,6 +111,7 @@
         </div>
         <figcaption class="mon-caption">
           <span class="rec-tc" aria-hidden="true"><span class="rec-dot"></span>REC <span class="tc" data-tc="live">00:00:00:00</span></span>
+          <span class="mon-wait" role="status" data-wait></span>
           <button class="mon-pause" type="button" data-video-pause hidden>Pause<span class="sr-only"> (Videos)</span></button>
         </figcaption>
       </figure>
@@ -163,6 +165,7 @@
                 </video>
               </div>
               <span class="m-rec"><span class="rec-dot"></span>REC</span>
+              <p class="m-wait" data-wait></p>
             </div>
             <div class="m-slate" aria-hidden="true">
               <div class="slate-sticks"><span class="stick stick-top"></span><span class="stick"></span></div>
@@ -227,12 +230,17 @@
             <div class="step-rail" aria-hidden="true"><span class="step-no">04</span><span class="step-name">Freigabe im Kundenportal</span></div>
             <div class="step-body">
               <h3 class="h3"><span class="sr-only">Schritt 4, Freigabe im Kundenportal: </span>Jeder Beitrag geht erst über Ihren Tisch.</h3>
-              <p>Schnitt, Untertitel und Farbkorrektur übernehmen wir. Den fertigen Beitrag sehen Sie im Kundenportal und geben ihn frei oder wünschen Änderungen.</p>
+              <p>Schnitt, Untertitel und Farbkorrektur übernehmen wir. Den fertigen Beitrag sehen Sie im Kundenportal und geben ihn frei oder wünschen Änderungen. Es läuft über Notion: im Browser oder als App auf dem Handy.</p>
               <div class="approve-demo" data-approve>
                 <p class="approve-caption">Beispiel aus dem Kundenportal</p>
-                <div class="approve-row">
-                  <p class="approve-status" aria-live="polite">Status: <strong data-approve-label>Änderungen offen</strong></p>
-                  <button type="button" class="btn btn-ink" data-approve-btn>Freigeben</button>
+                <p class="approve-status" aria-live="polite">Status: <strong data-approve-label>Änderungen offen</strong></p>
+                <div class="approve-note" id="approve-note" hidden>
+                  <p class="approve-comment"><span class="approve-who">Ihr Kommentar</span><span data-auto="„Bitte den Innenraum länger zeigen.“" data-immo="„Bitte mit der Küche beginnen.“">„Bitte die erste Szene kürzen.“</span></p>
+                  <p class="approve-reply">Der Beitrag bleibt offline, bis Sie ihn freigeben.</p>
+                </div>
+                <div class="approve-actions">
+                  <button type="button" class="btn btn-ink btn-sm" data-approve-btn>Freigeben</button>
+                  <button type="button" class="btn btn-ink-line btn-sm" data-request-btn aria-expanded="false" aria-controls="approve-note">Änderung wünschen</button>
                 </div>
               </div>
             </div>
@@ -270,6 +278,7 @@
           <li>Übergaben an Ihre Kunden</li>
           <li>Ihr Team, wie es wirklich arbeitet</li>
         </ul>
+        <a class="ask-link" href="#kontakt" data-ask-branche="auto">Als Autobetrieb anfragen <svg class="i" aria-hidden="true"><use href="#i-arrow"/></svg></a>
       </article>
 
       <article class="lane" data-lane="immo" aria-labelledby="lane-immo">
@@ -284,6 +293,7 @@
           <li>Ihr Team vor Ort und bei Besichtigungen</li>
           <li>360° Touren zum Begehen am Bildschirm</li>
         </ul>
+        <a class="ask-link" href="#kontakt" data-ask-branche="immo">Als Immobilienbetrieb anfragen <svg class="i" aria-hidden="true"><use href="#i-arrow"/></svg></a>
       </article>
     </div>
   </section>
@@ -311,26 +321,33 @@
             <h3 class="h3" id="pk-basis">Basis</h3>
           </header>
           <div class="month" aria-hidden="true" data-month='{"dreh":[2],"reel":[8,12,16,20,24],"feed":[10,18,26],"storyTicks":[5,12,19,26]}'></div>
-          <ul class="pk-list">
-            <li>1 voller Drehtag vor Ort, bis 8 Stunden</li>
-            <li>5 Reels mit Konzept, Schnitt, Untertiteln und Farbkorrektur</li>
-            <li>3 Feed-Beiträge aus dem Material des Drehtags</li>
-            <li>Story-Formate, einmal pro Woche</li>
-            <li>Community Management ca. 45 Minuten pro Woche</li>
-          </ul>
+          <div class="pk-body">
+            <ul class="pk-list">
+              <li><strong>1</strong> voller Drehtag vor Ort</li>
+              <li><strong>5</strong> Reels</li>
+              <li>3 Feed-Beiträge und Story-Formate einmal pro Woche</li>
+              <li>Community Management ca. 45 Minuten pro Woche</li>
+            </ul>
+            <a class="ask-link" href="#kontakt" data-ask-paket="Basis">Basis anfragen <svg class="i" aria-hidden="true"><use href="#i-arrow"/></svg></a>
+          </div>
         </article>
 
         <article class="package package-rec" aria-labelledby="pk-standard">
           <header class="pk-head">
             <h3 class="h3" id="pk-standard">Standard</h3>
             <span class="tag tag-lime">Empfohlen</span>
+            <p class="pk-why">Der Mittelweg aus Umfang und Preis: genug Content, um stetig zu wachsen, und nicht mehr als nötig.</p>
           </header>
           <div class="month" aria-hidden="true" data-month='{"dreh":[2],"reel":[6,9,12,15,18,21,24,27],"storySpan":true}'></div>
-          <ul class="pk-list">
-            <li>1 voller Drehtag vor Ort</li>
-            <li>8 Reels und Story-Formate</li>
-            <li>Zusätzlich auf TikTok</li>
-          </ul>
+          <div class="pk-body">
+            <ul class="pk-list">
+              <li><strong>1</strong> voller Drehtag vor Ort</li>
+              <li><strong>8</strong> Reels</li>
+              <li>Story-Formate</li>
+              <li>Zusätzlich auf TikTok</li>
+            </ul>
+            <a class="ask-link" href="#kontakt" data-ask-paket="Standard">Standard anfragen <svg class="i" aria-hidden="true"><use href="#i-arrow"/></svg></a>
+          </div>
         </article>
 
         <article class="package" aria-labelledby="pk-premium">
@@ -338,33 +355,39 @@
             <h3 class="h3" id="pk-premium">Premium</h3>
           </header>
           <div class="month" aria-hidden="true" data-month='{"dreh":[2,15],"reel":[4,6,8,11,13,15,17,19,21,23,25,27],"reelMore":true,"foto":[9,10],"storySpan":true}'></div>
-          <ul class="pk-list">
-            <li>2 Drehtage vor Ort</li>
-            <li>12 und mehr Reels plus Fotostrecke</li>
-            <li>Alle Kanäle inklusive Google Business und Meta Ads</li>
-          </ul>
+          <div class="pk-body">
+            <ul class="pk-list">
+              <li><strong>2</strong> Drehtage vor Ort</li>
+              <li><strong>12</strong> und mehr Reels</li>
+              <li>Fotostrecke</li>
+              <li>Alle Kanäle inklusive Google Business und Meta Ads</li>
+            </ul>
+            <a class="ask-link" href="#kontakt" data-ask-paket="Premium">Premium anfragen <svg class="i" aria-hidden="true"><use href="#i-arrow"/></svg></a>
+          </div>
         </article>
       </div>
 
       <div class="extras">
-        <h3 class="extras-title">In jedem Paket</h3>
-        <ul class="extras-list">
-          <li>Contentplan</li>
-          <li>Freigabe im Kundenportal</li>
-          <li>Community Management</li>
-          <li>Report pro Monat</li>
-        </ul>
-      </div>
-
-      <div class="extras">
-        <h3 class="extras-title">Zusätzlich buchbar</h3>
-        <ul class="extras-list">
-          <li>Setup &amp; Strategie, einmalig</li>
-          <li>Zusätzlicher Drehtag</li>
-          <li>Imagevideo</li>
-          <li>360° Tour pro Objekt, auch einzeln buchbar</li>
-          <li>Weitere Leistungen nach Aufwand</li>
-        </ul>
+        <div class="extras-col">
+          <h3 class="extras-title">In jedem Paket</h3>
+          <ul class="extras-list">
+            <li>Contentplan</li>
+            <li>Schnitt, Untertitel und Farbkorrektur</li>
+            <li>Freigabe im Kundenportal</li>
+            <li>Community Management</li>
+            <li>Report pro Monat</li>
+          </ul>
+        </div>
+        <div class="extras-col">
+          <h3 class="extras-title">Zusätzlich buchbar</h3>
+          <ul class="extras-list">
+            <li>Setup &amp; Strategie, einmalig</li>
+            <li>Zusätzlicher Drehtag</li>
+            <li>Imagevideo</li>
+            <li>360° Tour pro Objekt, auch einzeln buchbar</li>
+            <li>Weitere Leistungen nach Aufwand</li>
+          </ul>
+        </div>
       </div>
     </div>
   </section>
@@ -397,6 +420,11 @@
           </div>
         </fieldset>
 
+        <div class="field paket-field" data-paket-field hidden>
+          <input type="hidden" name="paket" value="" data-paket-input>
+          <p class="paket-chip"><span class="paket-led" aria-hidden="true"></span><span>Paket: <strong data-paket-name></strong></span><button type="button" class="paket-remove" data-paket-remove><svg class="i" aria-hidden="true"><use href="#i-close"/></svg><span class="sr-only">Paket entfernen</span></button></p>
+        </div>
+
         <div class="field-row">
           <div class="field">
             <label class="field-label" for="f-betrieb">Betrieb</label>
@@ -410,6 +438,7 @@
           </div>
         </div>
 
+        <p class="field-hint" id="h-reach">E-Mail oder Telefon genügt.</p>
         <div class="field-row">
           <div class="field">
             <label class="field-label" for="f-mail">E-Mail</label>
@@ -420,7 +449,6 @@
             <input id="f-tel" name="telefon" type="tel" autocomplete="tel" maxlength="40" aria-describedby="h-reach e-reach">
           </div>
         </div>
-        <p class="field-hint" id="h-reach">E-Mail oder Telefon genügt.</p>
         <p class="field-error" id="e-reach" hidden>Bitte geben Sie eine E-Mail-Adresse oder eine Telefonnummer an, damit wir uns melden können.</p>
 
         <div class="field">
@@ -474,6 +502,6 @@
   <a class="btn btn-primary btn-sm dock-cta" href="#kontakt"><span class="cta-long">Erstgespräch anfragen</span><span class="cta-short">Anfragen</span></a>
 </nav>
 
-<script src="/js/main.js?v=2026-10-27i" defer></script>
+<script src="/js/main.js?v=2026-10-28b" defer></script>
 </body>
 </html>

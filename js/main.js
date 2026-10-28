@@ -121,7 +121,7 @@
     let recorded = 0;
     let segStart = 0;
     let until = 0;
-    const stop = () => { cancelAnimationFrame(raf); raf = 0; recMonitor?.classList.remove('is-rec'); };
+    const stop = () => { if (raf) recorded += performance.now() - (segStart || performance.now()); cancelAnimationFrame(raf); raf = 0; segStart = 0; recMonitor?.classList.remove('is-rec'); };
     const tick = (now) => {
       if (!segStart) segStart = now;
       const ms = recorded + (now - segStart);
@@ -131,6 +131,8 @@
     };
     armLive = () => {
       if (!motionOK()) return;
+      // Ohne Material für die gewählte Branche wird nichts aufgenommen: kein laufendes REC
+      if (recMonitor?.classList.contains('is-waiting')) { stop(); return; }
       until = performance.now() + REC_MS;
       recMonitor?.classList.add('is-rec');
       if (!raf) { segStart = 0; raf = requestAnimationFrame(tick); }
@@ -256,7 +258,8 @@
      jeder weitere erst ab der Hälfte des laufenden. Kleine Monitore (bis 600 Gerätepixel breit)
      bekommen die Fassung 540x960 (<name>-s), der große Sucher am Telefon 720x1280.
      Spielt nur sichtbar; bei „weniger Bewegung“ oder Datensparmodus nur ein Standbild.
-     Lässt sich ein Clip nicht laden, kommt der nächste; klappt keiner, bleibt die Klappe. */
+     Lässt sich ein Clip nicht laden, kommt der nächste; klappt keiner, bleibt die Klappe.
+     Hat die gewählte Branche noch keine Clips, steht dort „<Branche>-Material folgt“ und kein REC läuft. */
   const VIDEO_DIR = '/assets/videos/';
   const pauseButtons = [...document.querySelectorAll('[data-video-pause]')];
   let videosPaused = false;
@@ -314,6 +317,15 @@
 
     const self = {};
     const other = () => videoPlayers.find((p) => p !== self);
+
+    // Gibt es für die gewählte Branche noch kein Material, sagt der Monitor das offen (statt leer zu laufen)
+    const waitEls = [...fig.querySelectorAll('[data-wait]')];
+    const markWaiting = (b) => {
+      const none = Boolean(b) && !forBranche(clips, b).length;
+      fig.classList.toggle('is-waiting', none);
+      waitEls.forEach((el) => { el.textContent = none ? `${LABEL[b]}-Material folgt` : ''; });
+    };
+    markWaiting(current);
 
     const pick = () => {
       if (!list.length) return null;
@@ -515,6 +527,7 @@
       setVisible(on) { visible = on; if (on) warm(); sync(); },
       setStage(on) { if (stage === on) return; stage = on; sync(); },
       setFilter(b) {
+        markWaiting(b);
         list = usable(b);
         queue = [];
         pending = null;
@@ -575,18 +588,17 @@
     });
   };
 
-  // Bereich zeigen und dorthin scrollen; aus der Leiste heraus bekommt die Überschrift den Fokus
+  // Bereich zeigen und genau zum Ziel scrollen (bei „Anfragen“ also zum Formular, nicht zur Kennzahl davor);
+  // aus der Leiste heraus bekommt die Überschrift des Ziels den Fokus
   const openTarget = (target, fromBar) => {
     const name = tabOf(target);
     if (!name) return false;
     showTab(name);
-    const first = tabSections.find((sec) => sec.dataset.tab === name);
-    const el = target.matches('[data-tab]') ? first : target;
     requestAnimationFrame(() => {
-      const top = el.getBoundingClientRect().top + window.scrollY - 8;
+      const top = target.getBoundingClientRect().top + window.scrollY - 8;
       window.scrollTo({ top, behavior: motionOK() ? 'smooth' : 'auto' });
       if (fromBar) {
-        const h = first.querySelector('h2');
+        const h = target.closest('[data-tab]').querySelector('h2');
         if (h) { h.setAttribute('tabindex', '-1'); h.focus({ preventScroll: true }); }
       }
     });
@@ -626,17 +638,30 @@
     fromHash();
   }
 
-  /* ---------- Freigabe-Beispiel ---------- */
+  /* ---------- Freigabe-Beispiel: freigeben oder Änderung wünschen ----------
+     Zustände wie im Kundenportal: „Änderungen offen“ (mit oder ohne Kommentar) und „Content freigegeben“. */
   const approveBox = document.querySelector('[data-approve]');
   const approveBtn = document.querySelector('[data-approve-btn]');
+  const requestBtn = document.querySelector('[data-request-btn]');
   const approveLabel = document.querySelector('[data-approve-label]');
-  approveBtn?.addEventListener('click', () => {
-    const on = !approveBox.classList.contains('is-approved');
-    approveBtn.textContent = on ? 'Freigabe zurücknehmen' : 'Freigeben';
-    approveLabel.textContent = on ? 'Content freigegeben' : 'Änderungen offen';
-    approveBox.classList.toggle('is-approved', on);
-    monitor?.classList.toggle('is-approved', on);
-  });
+  const approveNote = document.getElementById('approve-note');
+  if (approveBox && approveBtn && requestBtn && approveLabel && approveNote) {
+    const setApprove = (state) => {
+      const approved = state === 'approved';
+      const asked = state === 'asked';
+      approveBtn.textContent = approved ? 'Freigabe zurücknehmen' : 'Freigeben';
+      approveLabel.textContent = approved ? 'Content freigegeben' : 'Änderungen offen';
+      requestBtn.hidden = approved;
+      requestBtn.textContent = asked ? 'Kommentar zurücknehmen' : 'Änderung wünschen';
+      requestBtn.setAttribute('aria-expanded', String(asked));
+      approveNote.hidden = !asked;
+      approveBox.classList.toggle('is-approved', approved);
+      approveBox.classList.toggle('is-asked', asked);
+      monitor?.classList.toggle('is-approved', approved);
+    };
+    approveBtn.addEventListener('click', () => setApprove(approveBox.classList.contains('is-approved') ? 'open' : 'approved'));
+    requestBtn.addEventListener('click', () => setApprove(approveBox.classList.contains('is-asked') ? 'open' : 'asked'));
+  }
 
   /* ---------- Paketmonate: spielen sich beim Einblenden Tag für Tag ab ---------- */
   const DAY_MS = 16;
@@ -774,6 +799,20 @@
       if (e.target.getAttribute('aria-invalid') === 'true') validate();
     });
 
+    // Aus Branchen oder Paketen kommend: Branche bzw. Paket ist im Formular schon gewählt
+    const paketField = form.querySelector('[data-paket-field]');
+    const paketInput = form.querySelector('[data-paket-input]');
+    const paketName = form.querySelector('[data-paket-name]');
+    const setPaket = (p) => {
+      if (!paketField || !paketInput || !paketName) return;
+      paketInput.value = p || '';
+      paketName.textContent = p || '';
+      paketField.hidden = !p;
+    };
+    form.querySelector('[data-paket-remove]')?.addEventListener('click', () => { setPaket(''); form.betrieb.focus(); });
+    document.querySelectorAll('[data-ask-paket]').forEach((a) => a.addEventListener('click', () => setPaket(a.dataset.askPaket)));
+    document.querySelectorAll('[data-ask-branche]').forEach((a) => a.addEventListener('click', () => setBranche(a.dataset.askBranche, 'link')));
+
     const showStatus = (kind, html) => {
       statusBox.className = `form-status${kind === 'ok' ? ' is-ok' : ''}`;
       statusBox.innerHTML = html;
@@ -792,7 +831,7 @@
     const mailtoHref = () => {
       const v = (k) => (form[k] ? form[k].value : '').toString().trim();
       const branche = (form.querySelector('input[name="branche"]:checked') || {}).value || 'nicht angegeben';
-      const body = [`Branche: ${branche}`, `Betrieb: ${v('betrieb')}`, `Name: ${v('name')}`, `E-Mail: ${v('email') || '–'}`, `Telefon: ${v('telefon') || '–'}`, '', v('nachricht')].join('\n');
+      const body = [`Branche: ${branche}`, `Paket: ${v('paket') || 'nicht angegeben'}`, `Betrieb: ${v('betrieb')}`, `Name: ${v('name')}`, `E-Mail: ${v('email') || '–'}`, `Telefon: ${v('telefon') || '–'}`, '', v('nachricht')].join('\n');
       return `mailto:${MAIL}?subject=${encodeURIComponent(`Erstgespräch-Anfrage: ${v('betrieb')}`)}&body=${encodeURIComponent(body)}`;
     };
     const rescue = () => `Sie können die Anfrage auch <a href="${mailtoHref().replace(/"/g, '&quot;')}">als E-Mail senden</a> oder anrufen: <a href="tel:+491736386145">${PHONE}</a>.`;
@@ -829,6 +868,7 @@
         if (res.ok && json.ok) {
           form.reset();
           clearAll();
+          setPaket('');
           setBranche('', 'reset');
           showStatus('ok', '<strong>Danke, Ihre Anfrage ist angekommen.</strong>Wir melden uns bei Ihnen, um einen Termin für das Erstgespräch zu finden.');
         } else if (res.status === 422) {

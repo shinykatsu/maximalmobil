@@ -28,6 +28,7 @@ const RATE_WINDOW = 3600;                     // Sekunden
 const MIN_FILL_MS = 2500;                     // schneller ausgefüllt = sehr wahrscheinlich ein Bot
 const LIMITS      = ['betrieb' => 120, 'name' => 100, 'email' => 160, 'telefon' => 40, 'nachricht' => 3000];
 const BRANCHEN    = ['Automobil', 'Immobilien'];
+const PAKETE      = ['Basis', 'Standard', 'Premium'];
 const PHONE_SHOWN = '+49 173 6386145';
 const PHONE_LINK  = '+491736386145';
 
@@ -130,8 +131,8 @@ function render_page(int $status, array $payload): void
 <meta name="theme-color" content="#0a0a0a">
 <meta name="color-scheme" content="dark light">
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="/css/style.css?v=2026-10-27i">
-<script src="/js/head.js?v=2026-10-27i"></script>
+<link rel="stylesheet" href="/css/style.css?v=2026-10-28b">
+<script src="/js/head.js?v=2026-10-28b"></script>
 </head>
 <body>
 <div class="bg" aria-hidden="true">
@@ -199,6 +200,7 @@ if ($fill !== '' && ctype_digit($fill) && (int) $fill < MIN_FILL_MS) {
 }
 
 $branche   = one_line(post('branche'));
+$paket     = one_line(post('paket'));
 $betrieb   = one_line(post('betrieb'));
 $name      = one_line(post('name'));
 $email     = one_line(post('email'));
@@ -238,6 +240,7 @@ if (str_len($nachricht) > LIMITS['nachricht']) {
 }
 
 if ($branche !== '' && !in_array($branche, BRANCHEN, true)) $branche = '';
+if ($paket !== '' && !in_array($paket, PAKETE, true)) $paket = '';
 
 if ($errors) {
     respond(422, ['ok' => false, 'errors' => $errors]);
@@ -280,6 +283,7 @@ $lines = [
     'Neue Anfrage über maximalmobil.de',
     '',
     'Branche:   ' . ($branche !== '' ? $branche : 'nicht angegeben'),
+    'Paket:     ' . ($paket !== '' ? $paket : 'nicht angegeben'),
     'Betrieb:   ' . $betrieb,
     'Name:      ' . $name,
     'E-Mail:    ' . ($email !== '' ? $email : '–'),
