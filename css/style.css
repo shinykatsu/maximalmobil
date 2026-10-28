@@ -13,6 +13,8 @@
   --line:#222222;
   --line-2:#2c2b27;
   --line-control:#85837d;
+  /* Stern als Grafik statt Zeichen ✳: Handys zeigen das Zeichen sonst als buntes Emoji */
+  --star:url("/assets/icons/stern.svg") center/contain no-repeat;
   --bone:#e8e4df;
   --bone-dim:#a8a5a0;
   --bone-faint:#8f8c88;
@@ -187,7 +189,7 @@ strong,b{font-weight:400}
 .marquee{display:flex;overflow:hidden;min-width:0;flex:1;mask-image:linear-gradient(to right,transparent,#000 6%,#000 94%,transparent)}
 .marquee-row{display:flex;flex:none;gap:0;white-space:nowrap}
 .band .marquee-row li{display:flex;align-items:center;font:400 clamp(17px,1.5vw,22px)/1 var(--text);color:var(--bone)}
-.band .marquee-row li::after{content:"✳";color:var(--lime);margin-inline:clamp(18px,2vw,32px);font-size:.8em}
+.band .marquee-row li::after{content:"";flex:none;width:.61em;height:.61em;margin-inline:clamp(18px,2vw,32px);background:var(--lime);-webkit-mask:var(--star);mask:var(--star)}
 .still-btn{flex:none;height:36px;padding:0 14px;border:1px solid var(--line-2);border-radius:999px;font-size:13px;color:var(--bone-dim);transition:color .2s,border-color .2s}
 @media (hover:hover){.still-btn:hover{color:var(--bone);border-color:var(--bone-faint)}}
 .still-btn[aria-pressed="true"]{color:var(--ink);background:var(--bone);border-color:var(--bone)}
@@ -215,7 +217,7 @@ strong,b{font-weight:400}
 /* Laufschriften: erst auf rund 45 %, dann noch einmal 20 % kleiner (Wunsch des Nutzers, 28.10.2026) */
 .work-marquee{display:flex;overflow:hidden;font:800 clamp(22px,3.96vw,72px)/1 var(--display);letter-spacing:-.05em;color:var(--bone);padding-bottom:.08em}
 .work-marquee .marquee-row span{padding-right:.3em}
-.work-marquee .star{color:var(--lime);font-size:.5em;align-self:center;padding-right:.6em}
+.work-marquee .star{flex:none;font-size:.5em;align-self:center;width:.76em;height:.76em;margin:0 .665em 0 .065em;background:var(--lime);-webkit-mask:var(--star);mask:var(--star)}
 .work-bar{margin-top:clamp(28px,3vw,48px);align-items:end}
 .work-intro{color:var(--bone-dim);font-size:17px;max-width:46ch}
 .work-ctrl{display:flex;align-items:center;justify-content:flex-end;gap:10px}
@@ -321,7 +323,7 @@ strong,b{font-weight:400}
 .outline .marquee-row{align-items:center}
 .outline span{padding-inline:.25em;color:var(--bone)}
 .outline span.o{color:transparent;-webkit-text-stroke:1.5px var(--bone-faint)}
-.outline i{font-style:normal;color:var(--lime);font-size:.45em;padding-inline:.4em}
+.outline i{flex:none;font-size:.45em;width:.76em;height:.76em;margin-inline:.465em;background:var(--lime);-webkit-mask:var(--star);mask:var(--star)}
 
 /* Ablauf als Schnittspur */
 .flow-head{align-items:end;row-gap:24px}

@@ -132,7 +132,7 @@ function render_page(int $status, array $payload): void
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <link rel="preload" href="/assets/fonts/syne-800.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="/assets/fonts/outfit-300.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="stylesheet" href="/css/style.css?v=2026-10-28-v3b">
+<link rel="stylesheet" href="/css/style.css?v=2026-10-28-v3c">
 <title>' . h($title) . ' – maximalmobil</title>
 </head>
 <body class="page-legal">
