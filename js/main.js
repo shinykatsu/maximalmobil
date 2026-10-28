@@ -1,894 +1,641 @@
-/* maximalmobil – Startseite
-   Branchenwahl, Zeitleiste (Timecode, Abspielkopf), Klappe, Freigabe-Beispiel, Monatsraster, Formular.
-   Bewegung: Standardzustände sind immer sichtbar; versteckte Ausgangszustände setzt nur dieses Skript. */
+// maximalmobil · Version 3 „Der Sucher“
+// Ohne dieses Skript ist die Seite vollständig: alle Texte stehen da, die Videos zeigen ihr Standbild,
+// die Pakete stehen untereinander und das Formular schickt direkt an /anfrage.php.
 (() => {
   'use strict';
 
   const root = document.documentElement;
-  const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
-  const motionOK = () => !reduceMotion.matches;
-  const FPS = 25;            // PAL
-  const TOTAL_SECONDS = 30;  // Der Ablauf als ein 30-Sekunden-Reel
+  const $ = (s, el = document) => el.querySelector(s);
+  const $$ = (s, el = document) => Array.from(el.querySelectorAll(s));
+  const clamp = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v));
+  const easeOut = (t) => 1 - Math.pow(1 - t, 3);
+  const mq = (q) => window.matchMedia(q);
+  const reduceMq = mq('(prefers-reduced-motion: reduce)');
+  const finePointer = mq('(hover: hover) and (pointer: fine)').matches;
+  const saveData = !!(navigator.connection && navigator.connection.saveData);
+  let reduce = reduceMq.matches;
 
-  /* ---------- Timecode ---------- */
-  const two = (n) => String(n).padStart(2, '0');
-  const tcString = (frames) => {
-    const s = Math.floor(frames / FPS);
-    return `${two(Math.floor(s / 3600))}:${two(Math.floor(s / 60) % 60)}:${two(s % 60)}:${two(frames % FPS)}`;
+  /* ---------- Bewegung anhalten (WCAG 2.2.2) ----------
+     Ein Zustand für die ganze Seite: Videos, Laufschriften, Timecode und der runde Knopf stehen still. */
+  let still = false;
+  try { still = localStorage.getItem('mm-still') === '1'; } catch (e) { /* privates Fenster */ }
+  const stillBtns = $$('[data-still]');
+  const canMove = () => !reduce && !still;
+  const canPlayVideo = () => canMove() && !saveData;
+  const videoHooks = [];
+  const applyStill = () => {
+    root.classList.toggle('is-still', still);
+    stillBtns.forEach((b) => {
+      b.setAttribute('aria-pressed', String(still));
+      b.textContent = still ? 'Bewegung fortsetzen' : 'Bewegung anhalten';
+    });
+    videoHooks.forEach((fn) => fn());
   };
-  const paintTC = (el, str) => {
-    if (el._tc === str) return;
-    if (!el._cells || el._cells.length !== str.length) {
-      el.innerHTML = str.split('').map((ch) => (ch === ':' ? '<span class="c">:</span>' : '<span class="d"></span>')).join('');
-      el._cells = [...el.children];
-    }
-    for (let i = 0; i < str.length; i++) {
-      if (str[i] !== ':' && el._cells[i].textContent !== str[i]) el._cells[i].textContent = str[i];
-    }
-    el._tc = str;
-  };
-  document.querySelectorAll('.tc').forEach((el) => paintTC(el, el.textContent.trim()));
-
-  let armLive = () => {};
-
-  /* ---------- Klappe ---------- */
-  const monitors = [...document.querySelectorAll('.monitor')];
-  const videoPlayers = [];   // Echte Clips, siehe unten
-  const clap = (m) => {
-    if (!m || !motionOK()) return;
-    m.classList.remove('is-clap');
-    void m.offsetWidth; // Animation neu starten
-    m.classList.add('is-clap');
-  };
-  monitors.forEach((m) => m.addEventListener('animationend', (e) => {
-    if (e.animationName === 'clap') m.classList.remove('is-clap');
+  stillBtns.forEach((b) => b.addEventListener('click', () => {
+    still = !still;
+    try { localStorage.setItem('mm-still', still ? '1' : '0'); } catch (e) { /* egal */ }
+    applyStill();
   }));
+  reduceMq.addEventListener?.('change', (e) => { reduce = e.matches; applyStill(); });
 
-  // Text wechselt mit kurzer Unschärfe statt hart
-  const swapText = (el, text) => {
-    if (el.textContent === text && el._swapTo == null) return;
-    el._swapTo = text;
-    if (!motionOK() || !el.animate) { el.textContent = text; el._swapTo = null; return; }
-    el.getAnimations().forEach((a) => a.cancel());
-    const out = el.animate([{ opacity: 1, filter: 'blur(0px)' }, { opacity: 0, filter: 'blur(4px)' }], { duration: 120, easing: 'cubic-bezier(.4,0,1,1)', fill: 'forwards' });
-    out.onfinish = () => {
-      el.textContent = el._swapTo;
-      el._swapTo = null;
-      out.cancel();
-      el.animate([{ opacity: 0, filter: 'blur(4px)' }, { opacity: 1, filter: 'blur(0px)' }], { duration: 260, easing: 'cubic-bezier(.16,1,.3,1)' });
-    };
+  const play = (v) => {
+    if (!v || !canPlayVideo()) return;
+    const p = v.play();
+    if (p && p.catch) p.catch(() => {});
   };
+  const pause = (v) => { if (v && !v.paused) v.pause(); };
 
-  /* ---------- Branchenwahl: jede Wahl ist eine neue Szene ---------- */
-  const LABEL = { auto: 'Automobil', immo: 'Immobilien' };
-  const switchable = [...document.querySelectorAll('[data-auto]')];
-  switchable.forEach((el) => { el.dataset.none = el.textContent; });
-  const spurButtons = [...document.querySelectorAll('.spur')];
-  const spurThumb = document.querySelector('.spur-thumb');
-  const formBranche = [...document.querySelectorAll('input[name="branche"]')];
-  const takes = [...document.querySelectorAll('[data-take]')];
-  let current = '';
-  let take = 1;
-
-  const placeThumb = () => {
-    if (!spurThumb || !spurButtons.length) return;
-    const on = spurButtons.find((btn) => btn.getAttribute('aria-pressed') === 'true');
-    if (!on) { spurThumb.classList.remove('is-on'); return; }
-    const base = spurButtons[0].offsetWidth;
-    const appearing = !spurThumb.classList.contains('is-on');
-    if (appearing) spurThumb.style.transition = 'none';
-    spurThumb.style.setProperty('--tw', `${base}px`);
-    spurThumb.style.setProperty('--tx', `${on.offsetLeft}px`);
-    spurThumb.style.setProperty('--ts', (on.offsetWidth / base).toFixed(4));
-    if (appearing) { void spurThumb.offsetWidth; spurThumb.style.transition = ''; }
-    spurThumb.classList.add('is-on');
+  /* ---------- Kopfzeile: Menü und aktueller Abschnitt ---------- */
+  const head = $('[data-head]');
+  const menuBtn = $('[data-menu]');
+  const setMenu = (open) => {
+    head.classList.toggle('is-open', open);
+    menuBtn.setAttribute('aria-expanded', String(open));
+    root.style.overflow = open ? 'hidden' : '';
   };
+  menuBtn?.addEventListener('click', () => setMenu(!head.classList.contains('is-open')));
+  $$('[data-nav] a').forEach((a) => a.addEventListener('click', () => setMenu(false)));
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && head.classList.contains('is-open')) { setMenu(false); menuBtn.focus(); }
+  });
+  mq('(min-width: 1025px)').addEventListener?.('change', (e) => { if (e.matches) setMenu(false); });
 
-  const setBranche = (b, source) => {
-    b = b || '';
-    const changed = b !== current;
-    current = b;
-    if (b) root.dataset.branche = b; else delete root.dataset.branche;
-    spurButtons.forEach((btn) => btn.setAttribute('aria-pressed', String(btn.dataset.branche === b)));
-    placeThumb();
-    switchable.forEach((el) => swapText(el, b ? el.dataset[b] : el.dataset.none));
-    if (source !== 'form') formBranche.forEach((r) => { r.checked = Boolean(b) && r.value === LABEL[b]; });
-    if (changed) videoPlayers.forEach((p) => p.setFilter(b));
-    if (changed && source !== 'reset') {
-      take += 1;
-      takes.forEach((el) => swapText(el, String(take)));
-      monitors.forEach(clap);
-      setTimeout(() => armLive(), 175);
-    }
-  };
-  spurButtons.forEach((btn) => btn.addEventListener('click', () => {
-    setBranche(btn.getAttribute('aria-pressed') === 'true' ? '' : btn.dataset.branche, 'spur');
-  }));
-  formBranche.forEach((r) => r.addEventListener('change', () => {
-    const b = Object.keys(LABEL).find((k) => LABEL[k] === r.value);
-    setBranche(b, 'form');
-  }));
-  window.addEventListener('resize', placeThumb);
-  document.fonts?.ready.then(placeThumb);
-
-  /* ---------- Laufender Timecode der Klappe: läuft ab dem Schlag 4,8 s und hält dann an ----------
-     WCAG 2.2.2: automatisch startende Bewegung endet nach weniger als 5 Sekunden. */
-  const REC_MS = 4800;
-  const liveTC = document.querySelector('[data-tc="live"]');
-  if (liveTC) {
-    const recMonitor = liveTC.closest('.monitor');
-    let raf = 0;
-    let recorded = 0;
-    let segStart = 0;
-    let until = 0;
-    const stop = () => { if (raf) recorded += performance.now() - (segStart || performance.now()); cancelAnimationFrame(raf); raf = 0; segStart = 0; recMonitor?.classList.remove('is-rec'); };
-    const tick = (now) => {
-      if (!segStart) segStart = now;
-      const ms = recorded + (now - segStart);
-      paintTC(liveTC, tcString(Math.floor((ms / 1000) * FPS) % (FPS * 3600)));
-      if (now >= until) { recorded = ms; segStart = 0; stop(); return; }
-      raf = requestAnimationFrame(tick);
-    };
-    armLive = () => {
-      if (!motionOK()) return;
-      // Ohne Material für die gewählte Branche wird nichts aufgenommen: kein laufendes REC
-      if (recMonitor?.classList.contains('is-waiting')) { stop(); return; }
-      until = performance.now() + REC_MS;
-      recMonitor?.classList.add('is-rec');
-      if (!raf) { segStart = 0; raf = requestAnimationFrame(tick); }
-    };
+  const navLinks = new Map($$('[data-nav] a[href^="#"]').map((a) => [a.getAttribute('href').slice(1), a]));
+  const sectionFor = { reichweite: null, kontakt: null, idee: null, top: null };
+  if ('IntersectionObserver' in window) {
+    const io = new IntersectionObserver((entries) => {
+      entries.forEach((en) => {
+        if (!en.isIntersecting) return;
+        const id = en.target.id in sectionFor ? sectionFor[en.target.id] : en.target.id;
+        navLinks.forEach((a, key) => {
+          const on = key === id;
+          a.classList.toggle('is-here', on);
+          if (on) a.setAttribute('aria-current', 'true'); else a.removeAttribute('aria-current');
+        });
+      });
+    }, { rootMargin: '-45% 0px -50% 0px' });
+    $$('main > section[id]').forEach((s) => io.observe(s));
   }
 
-  /* ---------- Ablauf: Scroll treibt Abspielkopf, Timecode und Monitor ---------- */
-  const steps = [...document.querySelectorAll('.step')];
-  const stepsList = document.querySelector('.steps');
-  const panels = steps.map((s) => s.querySelector('.step-panel'));
-  const monitor = document.querySelector('[data-monitor]');
-  const timeline = document.querySelector('[data-timeline]');
-  const dock = document.querySelector('[data-dock]');
-  const dockClips = dock ? dock.querySelector('.dock-clips') : null;
-  const scrubTCs = [...document.querySelectorAll('[data-tc="scrub"]')];
-  const clipLinks = [...document.querySelectorAll('[data-clip]')];
-  const tlPlayhead = timeline ? timeline.querySelector('.tl-playhead') : null;
-  const dockPlayhead = dockClips ? dockClips.querySelector('.dock-playhead') : null;
-  const stepsLine = document.querySelector('.steps-line');
-  let lastP = '', lastSp = '';
-  const mobileQuery = window.matchMedia('(max-width: 53.75em)');
-  const sideBySide = window.matchMedia('(max-width: 53.75em) and (orientation: landscape) and (max-height: 31.25em)');
-  let activeStep = -1;
-  let dockShown = false;
+  /* ---------- Timecode im Sucher ---------- */
+  const tc = $('[data-timecode]');
+  const hero = $('[data-hero]');
+  let heroVisible = true;
+  if (tc) {
+    const t0 = performance.now();
+    const pad = (n) => String(n).padStart(2, '0');
+    setInterval(() => {
+      if (!heroVisible || !canMove() || document.hidden) return;
+      const f = Math.floor((performance.now() - t0) / 40); // 25 Bilder pro Sekunde
+      const s = Math.floor(f / 25);
+      tc.textContent = `${pad(Math.floor(s / 3600))}:${pad(Math.floor(s / 60) % 60)}:${pad(s % 60)}:${pad(f % 25)}`;
+    }, 40);
+  }
 
-  const setStep = (n) => {
-    if (n === activeStep) return;
-    activeStep = n;
-    for (let k = 1; k <= 5; k++) monitor.classList.toggle(`s${k}`, k <= Math.max(n, 1));
-    steps.forEach((s, i) => s.classList.toggle('is-active', i + 1 === n));
-    clipLinks.forEach((a) => {
-      const on = Number(a.dataset.clip) === n;
-      a.classList.toggle('is-active', on);
-      if (on) a.setAttribute('aria-current', 'step'); else a.removeAttribute('aria-current');
-    });
-  };
+  /* ---------- Videos ---------- */
+  const heroVideo = $('[data-autoplay]');
+  if (heroVideo && hero && 'IntersectionObserver' in window) {
+    new IntersectionObserver(([en]) => {
+      heroVisible = en.isIntersecting;
+      if (heroVisible) play(heroVideo); else pause(heroVideo);
+    }, { threshold: 0.15 }).observe(hero);
+    videoHooks.push(() => { if (canPlayVideo() && heroVisible) play(heroVideo); else pause(heroVideo); });
+  }
 
-  const showDock = (on) => {
-    if (!dock || on === dockShown) return;
-    dockShown = on;
-    dock.classList.toggle('is-visible', on);
-    root.classList.toggle('dock-on', on);
-    dock.inert = !on;
-  };
-
-  // Fokus nie unter der Leiste unten (WCAG 2.4.11)
-  document.addEventListener('focusin', (e) => {
-    if (!dockShown || !dock || dock.contains(e.target)) return;
-    const r = e.target.getBoundingClientRect();
-    const top = dock.getBoundingClientRect().top;
-    if (r.bottom > top - 8) window.scrollBy({ top: r.bottom - top + 24, left: 0, behavior: 'auto' });
+  // Arbeiten: mit der Maus beim Überfahren, auf dem Telefon das Reel, das gerade im Bild ist
+  const hoverFigs = $$('[data-hoverplay]');
+  hoverFigs.forEach((fig) => {
+    const v = $('video', fig);
+    v.addEventListener('playing', () => fig.classList.add('is-playing'));
+    v.addEventListener('pause', () => fig.classList.remove('is-playing'));
+    if (finePointer) {
+      fig.addEventListener('mouseenter', () => play(v));
+      fig.addEventListener('mouseleave', () => pause(v));
+    }
   });
+  if (!finePointer && 'IntersectionObserver' in window) {
+    const seen = new Set();
+    const io = new IntersectionObserver((entries) => {
+      entries.forEach((en) => {
+        const v = $('video', en.target);
+        if (en.intersectionRatio > 0.7) { seen.add(v); play(v); } else { seen.delete(v); pause(v); }
+      });
+    }, { threshold: [0, 0.7, 1] });
+    hoverFigs.forEach((f) => io.observe(f));
+    videoHooks.push(() => seen.forEach((v) => (canPlayVideo() ? play(v) : pause(v))));
+  }
+  videoHooks.push(() => { if (!canPlayVideo()) hoverFigs.forEach((f) => pause($('video', f))); });
 
-  const update = () => {
-    if (!steps.length || !monitor) return;
-    const vh = window.innerHeight;
-    const probe = vh * (mobileQuery.matches && !sideBySide.matches ? 0.7 : 0.5);
-    const tops = panels.map((p) => p.getBoundingClientRect().top);
-    const lastRect = steps[steps.length - 1].getBoundingClientRect();
-    const listRect = stepsList ? stepsList.getBoundingClientRect() : null;
+  /* ---------- Einblenden beim Scrollen ---------- */
+  const reveals = $$('[data-reveal]');
+  if ('IntersectionObserver' in window && !reduce) {
+    const groups = new Map();
+    reveals.forEach((el) => {
+      const key = el.parentElement;
+      const i = groups.get(key) || 0;
+      groups.set(key, i + 1);
+      el.style.setProperty('--d', `${Math.min(i, 7) * 80}ms`);
+    });
+    const io = new IntersectionObserver((entries) => {
+      entries.forEach((en) => {
+        if (en.isIntersecting) { en.target.classList.add('is-in'); io.unobserve(en.target); }
+      });
+    }, { rootMargin: '0px 0px -8% 0px', threshold: 0.05 });
+    reveals.forEach((el) => io.observe(el));
+  } else {
+    reveals.forEach((el) => el.classList.add('is-in'));
+  }
 
-    let i = -1;
-    tops.forEach((t, k) => { if (t <= probe) i = k; });
+  /* ---------- Der Name: Vorsilben und Endungen fahren an „mobil“ heran ---------- */
+  const stack = $('[data-stack]');
+  const slides = stack ? $$('[data-slide]', stack) : [];
 
-    let p = 0;
-    if (i >= 0) {
-      const next = i + 1 < tops.length ? tops[i + 1] : lastRect.bottom;
-      const local = Math.min(1, Math.max(0, (probe - tops[i]) / Math.max(1, next - tops[i])));
-      p = (i + local) / steps.length;
-    }
-
-    setStep(i + 1);
-    // Nur das jeweilige Element bekommt den Wert (nicht vererbt): kein Neuberechnen ganzer Bereiche pro Bild
-    const pStr = p.toFixed(4);
-    if (pStr !== lastP) {
-      lastP = pStr;
-      tlPlayhead?.style.setProperty('--p', pStr);
-      dockPlayhead?.style.setProperty('--p', pStr);
-    }
-    if (listRect && stepsLine) {
-      const spStr = Math.min(1, Math.max(0, (probe - listRect.top) / Math.max(1, listRect.height))).toFixed(3);
-      if (spStr !== lastSp) { lastSp = spStr; stepsLine.style.setProperty('--sp', spStr); }
-    }
-    const tc = tcString(Math.round(p * TOTAL_SECONDS * FPS));
-    scrubTCs.forEach((el) => paintTC(el, tc));
-
-    showDock(tops[0] < vh * 0.9 && lastRect.bottom > vh * 0.55);
+  /* ---------- Für wen: angepinnt auf großen Bildschirmen ---------- */
+  const pin = $('[data-pin]');
+  const pinPanels = pin ? $$('[data-pin-panel]', pin) : [];
+  const pinMarks = pin ? $$('[data-pin-mark]', pin) : [];
+  const pinBar = pin ? $('[data-pin-bar]', pin) : null;
+  const pinMq = mq('(min-width: 1025px) and (min-height: 680px)');
+  let pinOn = false;
+  let pinIndex = -1;
+  const panelVideo = pin ? $('[data-panel-video]', pin) : null;
+  const setPanel = (i) => {
+    if (i === pinIndex) return;
+    pinIndex = i;
+    pinPanels.forEach((p, k) => {
+      p.classList.toggle('is-on', k === i);
+      if (pinOn) p.setAttribute('aria-hidden', String(k !== i)); else p.removeAttribute('aria-hidden');
+    });
+    pinMarks.forEach((m, k) => m.classList.toggle('is-on', k === i));
+    if (panelVideo) { if (i === 0) play(panelVideo); else pause(panelVideo); }
   };
+  const syncPin = () => {
+    pinOn = !!pin && pinMq.matches && !reduce;
+    pin?.classList.toggle('is-pin', pinOn);
+    pinIndex = -1;
+    if (!pinOn) {
+      pinPanels.forEach((p) => { p.classList.add('is-on'); p.removeAttribute('aria-hidden'); });
+      pinMarks.forEach((m) => m.classList.remove('is-on'));
+    }
+  };
+  if (pin) {
+    syncPin();
+    pinMq.addEventListener?.('change', () => { syncPin(); onScroll(); });
+    // Mit der Tastatur in ein verstecktes Panel? Dann zu dessen Stelle scrollen.
+    pinPanels.forEach((p, k) => p.addEventListener('focusin', () => {
+      if (!pinOn || k === pinIndex) return;
+      const total = pin.offsetHeight - window.innerHeight;
+      window.scrollTo({ top: pin.offsetTop + total * ((k + 0.5) / pinPanels.length), behavior: 'auto' });
+    }));
+    // Links „Automobil / Immobilien / Privat“ im ersten Bildschirm: angepinnt zur Stelle des Panels scrollen
+    $$('[data-jump]').forEach((a) => a.addEventListener('click', (e) => {
+      if (!pinOn) return;
+      e.preventDefault();
+      const k = Number(a.dataset.jump);
+      const total = pin.offsetHeight - window.innerHeight;
+      window.scrollTo({ top: pin.offsetTop + total * ((k + 0.5) / pinPanels.length), behavior: reduce ? 'auto' : 'smooth' });
+    }));
+    if (panelVideo && 'IntersectionObserver' in window) {
+      new IntersectionObserver(([en]) => {
+        if (pinOn) return;
+        if (en.isIntersecting) play(panelVideo); else pause(panelVideo);
+      }, { threshold: 0.5 }).observe(panelVideo);
+      videoHooks.push(() => { if (!canPlayVideo()) pause(panelVideo); else if (pinOn && pinIndex === 0) play(panelVideo); });
+    }
+  }
 
+  /* ---------- Ablauf: Abspielkopf über der Schnittspur ---------- */
+  const flow = $('[data-flow]');
+  const tl = flow ? $('.tl', flow) : null;
+  const playhead = flow ? $('[data-playhead]', flow) : null;
+  const phTc = flow ? $('[data-ph-tc]', flow) : null;
+  const clips = flow ? $$('[data-clip]', flow) : [];
+  const steps = flow ? $$('[data-step]', flow) : [];
+  if (flow) flow.classList.add('is-live');
+
+  /* ---------- Reichweite: leichtes Mitlaufen des Bildes ---------- */
+  const proofImg = $('.proof-frame img');
+
+  /* ---------- Eine Schleife für alles, was am Scrollen hängt ---------- */
   let ticking = false;
-  const onScroll = () => {
+  function onScroll() {
     if (ticking) return;
     ticking = true;
-    requestAnimationFrame(() => { ticking = false; update(); });
-  };
-  if (monitor) {
-    window.addEventListener('scroll', onScroll, { passive: true });
-    window.addEventListener('resize', onScroll);
+    requestAnimationFrame(frame);
+  }
+  function frame() {
+    ticking = false;
+    const vh = window.innerHeight;
+
+    // Name
+    if (stack) {
+      const r = stack.getBoundingClientRect();
+      const p = reduce ? 1 : easeOut(clamp((vh - r.top) / (vh * 0.75)));
+      const off = (1 - p) * Math.min(window.innerWidth * 0.28, 420);
+      slides.forEach((el) => { el.style.transform = p >= 1 ? '' : `translate3d(${Number(el.dataset.slide) * off}px,0,0)`; });
+    }
+
+    // Angepinnte Branchen
+    if (pinOn) {
+      const r = pin.getBoundingClientRect();
+      const total = pin.offsetHeight - (vh - head.offsetHeight);
+      const p = clamp(-r.top / total);
+      if (pinBar) pinBar.style.transform = `scaleX(${p})`;
+      setPanel(Math.min(pinPanels.length - 1, Math.floor(p * pinPanels.length * 0.999)));
+    } else if (pin && pinIndex !== -2) {
+      pinIndex = -2;
+    }
+
+    // Abspielkopf
+    if (tl && playhead && tl.offsetParent !== null) {
+      const r = tl.getBoundingClientRect();
+      const p = reduce ? 1 : clamp((vh * 0.8 - r.top) / (vh * 0.55));
+      const w = tl.clientWidth - parseFloat(getComputedStyle(tl).paddingLeft) * 2;
+      playhead.style.transform = `translate3d(${p * Math.max(0, w - 2)}px,0,0)`;
+      const idx = Math.min(clips.length - 1, Math.floor(p * clips.length * 0.999));
+      clips.forEach((c, k) => c.classList.toggle('is-on', k === idx));
+      steps.forEach((s, k) => { s.classList.toggle('is-on', k === idx); s.classList.toggle('is-past', k < idx); });
+      if (phTc) phTc.textContent = `Tag ${String(1 + Math.round(p * 29)).padStart(2, '0')}`;
+    }
+
+    // Bild der Reichweite
+    if (proofImg && !reduce) {
+      const r = proofImg.parentElement.getBoundingClientRect();
+      if (r.bottom > 0 && r.top < vh) {
+        const p = clamp((vh - r.top) / (vh + r.height));
+        proofImg.style.transform = `translate3d(0,${(-p * 13).toFixed(2)}%,0)`;
+      }
+    }
+  }
+  window.addEventListener('scroll', onScroll, { passive: true });
+  window.addEventListener('resize', onScroll, { passive: true });
+  onScroll();
+
+  /* ---------- Arbeiten: Reihe zum Durchblättern ---------- */
+  const track = $('[data-track]');
+  if (track) {
+    const items = $$('.work-item', track);
+    const prev = $('[data-work-prev]');
+    const next = $('[data-work-next]');
+    const pos = $('[data-work-pos]');
+    const step = () => (items[1] ? items[1].offsetLeft - items[0].offsetLeft : track.clientWidth * 0.8);
+    const smooth = reduce ? 'auto' : 'smooth';
+    prev?.addEventListener('click', () => track.scrollBy({ left: -step(), behavior: smooth }));
+    next?.addEventListener('click', () => track.scrollBy({ left: step(), behavior: smooth }));
+    const update = () => {
+      const max = track.scrollWidth - track.clientWidth - 2;
+      if (prev) prev.disabled = track.scrollLeft <= 2;
+      if (next) next.disabled = track.scrollLeft >= max;
+      const i = clamp(Math.round(track.scrollLeft / step()), 0, items.length - 1);
+      if (pos) pos.textContent = String(track.scrollLeft >= max ? items.length : i + 1).padStart(2, '0');
+    };
+    track.addEventListener('scroll', () => requestAnimationFrame(update), { passive: true });
+    window.addEventListener('resize', update, { passive: true });
     update();
+
+    // Mit der Maus ziehen
+    let down = null;
+    track.addEventListener('pointerdown', (e) => {
+      if (e.pointerType !== 'mouse' || e.button !== 0) return;
+      down = { x: e.clientX, left: track.scrollLeft, moved: false };
+    });
+    window.addEventListener('pointermove', (e) => {
+      if (!down) return;
+      const dx = e.clientX - down.x;
+      if (!down.moved && Math.abs(dx) > 6) { down.moved = true; track.classList.add('is-drag'); }
+      if (down.moved) track.scrollLeft = down.left - dx;
+    });
+    window.addEventListener('pointerup', () => {
+      if (!down) return;
+      const moved = down.moved;
+      down = null;
+      track.classList.remove('is-drag');
+      if (moved) {
+        const i = Math.round(track.scrollLeft / step());
+        track.scrollTo({ left: i * step(), behavior: smooth });
+      }
+    });
   }
 
-  /* ---------- Intro: Clips legen sich auf die Zeitleiste, dann schlägt die Klappe ---------- */
-  const heroMonitor = document.querySelector('.monitor-hero');
-  const introUntil = root.classList.contains('intro') ? performance.now() + 1650 : 0;
-  if (root.classList.contains('intro')) {
-    requestAnimationFrame(() => requestAnimationFrame(() => root.classList.remove('intro')));
-    // Der Timecode startet im Moment, in dem die Klappe zuschlägt (24 % von 720 ms)
-    setTimeout(() => { clap(heroMonitor); setTimeout(armLive, 175); }, 820);
-  } else {
-    armLive();
-  }
-
-  /* ---------- Schleifen pausieren außerhalb des Bildschirms ---------- */
-  if ('IntersectionObserver' in window) {
-    const offscreen = new IntersectionObserver((entries) => entries.forEach((e) => e.target.classList.toggle('is-off', !e.isIntersecting)));
-    monitors.forEach((m) => offscreen.observe(m));
-  }
-
-  /* ---------- Echte Clips in den Monitoren ----------
-     Liste aus /assets/videos/videos.json, je Monitor eigene zufällige Reihenfolge (Fisher-Yates).
-     Zwei Videos pro Monitor: das nächste lädt unsichtbar vor und blendet in 250 ms über.
-     Der erste Clip lädt schon, sobald der Monitor sichtbar ist (oben also während der Klappe),
-     jeder weitere erst ab der Hälfte des laufenden. Kleine Monitore (bis 600 Gerätepixel breit)
-     bekommen die Fassung 540x960 (<name>-s), der große Sucher am Telefon 720x1280.
-     Spielt nur sichtbar; bei „weniger Bewegung“ oder Datensparmodus nur ein Standbild.
-     Lässt sich ein Clip nicht laden, kommt der nächste; klappt keiner, bleibt die Klappe.
-     Hat die gewählte Branche noch keine Clips, steht dort „<Branche>-Material folgt“ und kein REC läuft. */
-  const VIDEO_DIR = '/assets/videos/';
-  const pauseButtons = [...document.querySelectorAll('[data-video-pause]')];
-  let videosPaused = false;
-  const saveData = Boolean(navigator.connection && navigator.connection.saveData);
-  const shuffle = (arr) => {
-    const a = arr.slice();
-    for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
-    return a;
+  /* ---------- Pakete: Reiter und Beispielmonat ---------- */
+  const PLANS = {
+    basis: {
+      sum: [[1, 'Drehtag'], [5, 'Reels'], [3, 'Feed-Beiträge'], [4, 'Story-Formate']],
+      tiktok: false,
+      days: { 1: ['plan'], 2: ['dreh'], 5: ['story'], 6: ['reel'], 8: ['feed'], 10: ['reel'], 12: ['story'], 15: ['reel'], 17: ['feed'], 19: ['story'], 20: ['reel'], 25: ['reel'], 26: ['story'], 27: ['feed'], 28: ['report'] },
+    },
+    standard: {
+      sum: [[1, 'Drehtag'], [8, 'Reels'], [3, 'Feed-Beiträge'], [4, 'Story-Formate'], ['+', 'TikTok']],
+      tiktok: true,
+      days: { 1: ['plan'], 2: ['dreh'], 4: ['reel'], 6: ['story'], 7: ['reel'], 9: ['feed'], 10: ['reel'], 13: ['reel', 'story'], 16: ['reel'], 18: ['feed'], 19: ['reel'], 20: ['story'], 22: ['reel'], 25: ['reel'], 26: ['feed'], 27: ['story'], 28: ['report'] },
+    },
+    premium: {
+      sum: [[2, 'Drehtage'], ['12+', 'Reels'], [3, 'Feed-Beiträge'], [4, 'Story-Formate'], [1, 'Fotostrecke'], ['+', 'alle Kanäle']],
+      tiktok: true,
+      days: { 1: ['plan'], 2: ['dreh'], 4: ['reel'], 5: ['story'], 6: ['reel'], 8: ['reel'], 9: ['foto'], 10: ['reel'], 11: ['feed'], 12: ['reel', 'story'], 14: ['reel'], 16: ['dreh'], 17: ['feed'], 18: ['reel'], 19: ['story'], 20: ['reel'], 22: ['reel'], 24: ['reel'], 25: ['feed'], 26: ['reel', 'story'], 27: ['reel'], 28: ['report'] },
+    },
   };
-  const forBranche = (clips, b) => clips.filter((c) => !b || c.branche === b || c.branche === 'alle');
-
-  const updatePauseUI = () => {
-    pauseButtons.forEach((btn) => {
-      const p = videoPlayers.find((x) => x.fig.contains(btn));
-      btn.hidden = !(p && p.isActive());
-      btn.firstChild.textContent = videosPaused ? 'Abspielen' : 'Pause';
-    });
+  const CHIP = { plan: ['chip-plan', 'Plan'], dreh: ['chip-dreh', 'Drehtag'], reel: ['chip-reel', 'Reel'], feed: ['chip-feed', 'Feed'], story: ['chip-story', 'Story'], foto: ['chip-foto', 'Fotostrecke'], report: ['chip-plan', 'Report'] };
+  const NAMES = { basis: 'Basis', standard: 'Standard', premium: 'Premium' };
+  const calGrid = $('[data-cal-grid]');
+  const tabs = $$('[data-tab]');
+  const calPanel = document.getElementById('cal-panel');
+  const renderCal = (key) => {
+    if (!calGrid) return;
+    const plan = PLANS[key];
+    $$('.day', calGrid).forEach((d) => d.remove());
+    let k = 0;
+    for (let d = 1; d <= 28; d += 1) {
+      const cell = document.createElement('div');
+      cell.className = 'day';
+      const n = document.createElement('span');
+      n.className = 'day-n';
+      n.textContent = String(d);
+      cell.appendChild(n);
+      (plan.days[d] || []).forEach((type) => {
+        const [cls, label] = CHIP[type];
+        const c = document.createElement('span');
+        c.className = `chip ${cls}`;
+        c.style.setProperty('--k', String(k += 1));
+        c.textContent = label;
+        if (type === 'reel' && plan.tiktok) {
+          const s = document.createElement('small');
+          s.textContent = '+ TikTok';
+          c.appendChild(s);
+        }
+        cell.appendChild(c);
+      });
+      calGrid.appendChild(cell);
+    }
+    calGrid.setAttribute('aria-label', `Beispiel eines Contentplans über vier Wochen für das Paket ${NAMES[key]}: ${plan.sum.map(([a, b]) => `${a} ${b}`).join(', ')}, dazu Contentplan am Monatsanfang und Report am Monatsende.`);
   };
-  pauseButtons.forEach((btn) => btn.addEventListener('click', () => {
-    videosPaused = !videosPaused;
-    videoPlayers.forEach((p) => p.sync());
-    updatePauseUI();
-  }));
-
-  const createPlayer = (fig, clips) => {
-    const box = fig.querySelector('.m-media');
-    const first = box && box.querySelector('.m-video');
-    if (!first) return null;
-    const second = document.createElement('video');
-    second.className = 'm-video';
-    box.appendChild(second);
-    [first, second].forEach((v) => {
-      v.muted = true; v.defaultMuted = true; v.playsInline = true;
-      v.setAttribute('muted', ''); v.setAttribute('playsinline', '');
-      v.disablePictureInPicture = true;
+  const selectTab = (key, focus) => {
+    tabs.forEach((t) => {
+      const on = t.dataset.tab === key;
+      t.setAttribute('aria-selected', String(on));
+      t.tabIndex = on ? 0 : -1;
+      if (on && focus) t.focus();
     });
-    const canWebm = first.canPlayType('video/webm; codecs="vp9"') === 'probably';
-    const kind = fig.dataset.player;
-
-    let front = first;
-    let back = second;
-    const broken = new Set();  // Clips, die sich nicht laden ließen: werden nicht mehr gewählt
-    const usable = (b) => forBranche(clips, b).filter((c) => !broken.has(c.name));
-    let list = usable(current);
-    let queue = [];
-    let shown = '';        // Clip, der gerade zu sehen ist
-    let last = '';         // zuletzt gespielter Clip
-    let pending = null;    // im hinteren Video vorgeladener Clip
-    let mode = !motionOK() || saveData ? 'poster' : 'video';
-    let visible = false;
-    let stage = false;     // oben: nach der Klappe; im Ablauf: ab Schritt 3
-    let started = false;
-    let busy = false;
-    let fails = 0;
-
-    const self = {};
-    const other = () => videoPlayers.find((p) => p !== self);
-
-    // Gibt es für die gewählte Branche noch kein Material, sagt der Monitor das offen (statt leer zu laufen)
-    const waitEls = [...fig.querySelectorAll('[data-wait]')];
-    const markWaiting = (b) => {
-      const none = Boolean(b) && !forBranche(clips, b).length;
-      fig.classList.toggle('is-waiting', none);
-      waitEls.forEach((el) => { el.textContent = none ? `${LABEL[b]}-Material folgt` : ''; });
-    };
-    markWaiting(current);
-
-    const pick = () => {
-      if (!list.length) return null;
-      if (list.length === 1) return list[0];
-      if (!queue.length) {
-        queue = shuffle(list);
-        // nach dem Neumischen nie mit dem zuletzt gespielten Clip anfangen
-        if (queue[0].name === last) {
-          const k = 1 + Math.floor(Math.random() * (queue.length - 1));
-          [queue[0], queue[k]] = [queue[k], queue[0]];
-        }
-      }
-      const avoid = other()?.shown;
-      let i = queue.findIndex((c) => c.name !== shown && c.name !== avoid);
-      if (i < 0) i = queue.findIndex((c) => c.name !== shown);
-      if (i < 0) i = 0;
-      return queue.splice(i, 1)[0];
-    };
-
-    const markBroken = (name) => {
-      broken.add(name);
-      list = list.filter((c) => c.name !== name);
-      queue = queue.filter((c) => c.name !== name);
-      if (pending && pending.name === name) pending = null;
-    };
-
-    // Quellen in der Reihenfolge, in der sie versucht werden: passende Größe zuerst, WebM vor MP4
-    const smallScreen = () => {
-      const w = box.getBoundingClientRect().width * (window.devicePixelRatio || 1);
-      return w > 0 && w <= 600;
-    };
-    const sourcesFor = (clip) => {
-      const sizes = smallScreen() ? ['-s', ''] : [''];
-      const exts = canWebm ? ['webm', 'mp4'] : ['mp4'];
-      return sizes.flatMap((s) => exts.map((e) => `${VIDEO_DIR}${clip.name}${s}.${e}`));
-    };
-    const assign = (v, clip) => {
-      if (v._clip === clip.name && !v._failed) return;
-      v._clip = clip.name;
-      v._failed = false;
-      v._srcs = sourcesFor(clip);
-      v._si = 0;
-      v.preload = 'auto';
-      v.src = v._srcs[0];
-      v.load();
-    };
-
-    // Startet den Clip im (unsichtbaren) Video; erfüllt sich, sobald wirklich Bild läuft
-    const startOn = (v, clip) => new Promise((resolve, reject) => {
-      assign(v, clip);
-      if (v._failed) { reject(new Error('load')); return; }
-      let timer = 0;
-      const cleanup = () => { clearTimeout(timer); v.removeEventListener('playing', onPlaying); v._fail = null; };
-      const onPlaying = () => { cleanup(); resolve(); };
-      v._fail = () => { cleanup(); reject(new Error('load')); };   // ruft der Fehler-Listener unten
-      v.addEventListener('playing', onPlaying);
-      timer = setTimeout(() => { cleanup(); reject(new Error('timeout')); }, 8000);
-      try { v.currentTime = 0; } catch (e) { /* noch keine Metadaten */ }
-      v.play().catch((err) => { if (err && err.name === 'NotAllowedError') { cleanup(); reject(err); } });
-    });
-
-    const preloadNext = () => {
-      if (mode !== 'video' || list.length < 2) { pending = null; return; }
-      pending = pick();
-      if (pending) assign(back, pending);
-    };
-
-    // Erster Clip: lädt, sobald der Monitor sichtbar ist, damit er nach der Klappe sofort laufen kann
-    const warm = () => {
-      if (mode !== 'video' || started || busy || pending || !list.length) return;
-      pending = pick();
-      if (pending) assign(back, pending);
-    };
-
-    // Nächster Clip: erst ab der Hälfte des laufenden, damit beide nicht gleichzeitig laden
-    const armPreload = (v) => {
-      if (v._onTime) v.removeEventListener('timeupdate', v._onTime);
-      v._onTime = () => {
-        if (v !== front || v._clip !== shown) return;
-        if (v.duration && v.currentTime >= v.duration / 2) {
-          v.removeEventListener('timeupdate', v._onTime);
-          v._onTime = null;
-          if (!pending) preloadNext();
-        }
-      };
-      v.addEventListener('timeupdate', v._onTime);
-    };
-
-    const hide = () => {
-      [first, second].forEach((v) => { v.classList.remove('is-on'); v.pause(); });
-      fig.classList.remove('has-media');
-      shown = '';
-      started = false;
-      updatePauseUI();
-    };
-
-    const showPoster = () => {
-      const avoid = other()?.shown;
-      const pool = list.filter((c) => c.name !== avoid);
-      const clip = (pool.length ? pool : list)[Math.floor(Math.random() * (pool.length || list.length))];
-      if (!clip) { hide(); return; }
-      front.poster = `${VIDEO_DIR}${clip.name}.jpg`;
-      front.classList.add('is-on');
-      fig.classList.add('has-media');
-      shown = clip.name;
-      started = true;
-    };
-
-    const playNext = async () => {
-      if (busy || mode !== 'video') return;
-      let clip = pending && list.some((c) => c.name === pending.name) ? pending : null;
-      if (clip && clip.name === other()?.shown && list.length > 2) { queue.unshift(clip); clip = null; }
-      if (!clip) clip = pick();
-      pending = null;
-      if (!clip) { hide(); return; }
-
-      // nur ein Clip in der Auswahl: einfach von vorn
-      if (clip.name === shown) {
-        front.currentTime = 0;
-        front.play().catch(() => {});
-        return;
-      }
-      busy = true;
-      const next = back;
-      try {
-        await startOn(next, clip);
-        if (!shouldPlay()) next.pause();
-        next.classList.add('is-on');
-        front.classList.remove('is-on');
-        const old = front;
-        setTimeout(() => old.pause(), 300);
-        front = next;
-        back = old;
-        shown = clip.name;
-        last = clip.name;
-        started = true;
-        fails = 0;
-        fig.classList.add('has-media');
-        updatePauseUI();
-        busy = false;
-        armPreload(front);
-      } catch (err) {
-        busy = false;
-        if (err && err.name === 'NotAllowedError') {
-          // Browser verbietet Autoplay (z. B. Stromsparmodus): Standbild statt Video
-          next._clip = '';
-          mode = 'poster';
-          showPoster();
-          updatePauseUI();
-          return;
-        }
-        // Ladefehler: Clip ist schon aussortiert. Zeitüberschreitung (langsames Netz): Clip bleibt in der Liste
-        if (err && err.message === 'timeout') { next._clip = ''; fails += 1; }
-        if (!list.length || fails > list.length) { mode = 'off'; hide(); return; }
-        playNext();
-      }
-    };
-
-    const shouldPlay = () => mode === 'video' && visible && stage && !videosPaused && !document.hidden && list.length > 0;
-
-    const sync = () => {
-      if (mode === 'poster') { if (visible && !started && list.length) showPoster(); return; }
-      if (mode !== 'video') return;
-      if (shouldPlay()) {
-        if (!started) { playNext(); return; }
-        if (front.paused && !busy) front.play().catch(() => {});
-      } else if (!front.paused) {
-        front.pause();
-      }
-    };
-
-    [first, second].forEach((v) => {
-      v.addEventListener('ended', () => { if (v === front) playNext(); });
-      // Ein Fehler-Listener für alle Fälle: erst die übrigen Quellen versuchen (MP4, große Fassung), dann Clip aussortieren
-      v.addEventListener('error', () => {
-        const name = v._clip;
-        if (!name) return;
-        if (v._srcs && v._si < v._srcs.length - 1) {
-          v._si += 1;
-          v.src = v._srcs[v._si];
-          v.load();
-          if (v._fail) v.play().catch(() => {});
-          return;
-        }
-        v._failed = true;
-        markBroken(name);
-        if (v._fail) { v._fail(); return; }               // startOn wartet: dort geht es weiter
-        if (v === front && started && !busy) {            // Fehler mitten im laufenden Clip
-          if (list.length) playNext(); else { mode = 'off'; hide(); }
-        }
+    if (calPanel) calPanel.setAttribute('aria-labelledby', `tab-${key}`);
+    renderCal(key);
+  };
+  if (tabs.length) {
+    tabs.forEach((t, i) => {
+      t.addEventListener('click', () => selectTab(t.dataset.tab));
+      t.addEventListener('keydown', (e) => {
+        let j = null;
+        if (e.key === 'ArrowRight') j = (i + 1) % tabs.length;
+        if (e.key === 'ArrowLeft') j = (i - 1 + tabs.length) % tabs.length;
+        if (e.key === 'Home') j = 0;
+        if (e.key === 'End') j = tabs.length - 1;
+        if (j !== null) { e.preventDefault(); selectTab(tabs[j].dataset.tab, true); }
       });
     });
-
-    Object.assign(self, {
-      fig, kind,
-      get shown() { return shown; },
-      isActive: () => mode === 'video' && started,
-      sync,
-      setVisible(on) { visible = on; if (on) warm(); sync(); },
-      setStage(on) { if (stage === on) return; stage = on; sync(); },
-      setFilter(b) {
-        markWaiting(b);
-        list = usable(b);
-        queue = [];
-        pending = null;
-        if (mode === 'poster') { if (started) { if (list.length) showPoster(); else hide(); } return; }
-        if (mode !== 'video') return;
-        if (!list.length) { hide(); return; }
-        if (started && !list.some((c) => c.name === shown)) {
-          if (shouldPlay()) playNext(); else hide();
-          return;
-        }
-        if (started) armPreload(front);
-        else if (visible) warm();
-        sync();
-      },
-    });
-    return self;
-  };
-
-  const playerFigs = [...document.querySelectorAll('[data-player]')];
-  if (playerFigs.length && 'IntersectionObserver' in window && window.fetch) {
-    fetch(`${VIDEO_DIR}videos.json`).then((r) => (r.ok ? r.json() : [])).then((data) => {
-      const clips = (Array.isArray(data) ? data : [])
-        .filter((c) => c && typeof c.name === 'string' && /^[a-z0-9-]+$/.test(c.name))
-        .map((c) => ({ name: c.name, branche: c.branche === 'auto' || c.branche === 'immo' ? c.branche : 'alle' }));
-      if (!clips.length) return;
-      playerFigs.forEach((fig) => { const p = createPlayer(fig, clips); if (p) videoPlayers.push(p); });
-      const seen = new IntersectionObserver((entries) => entries.forEach((e) => {
-        const p = videoPlayers.find((x) => x.fig === e.target);
-        if (p) p.setVisible(e.isIntersecting && e.intersectionRatio >= 0.2);
-      }), { threshold: [0, 0.2, 0.5] });
-      videoPlayers.forEach((p) => seen.observe(p.fig));
-      document.addEventListener('visibilitychange', () => videoPlayers.forEach((p) => p.sync()));
-      videoPlayers.forEach((p) => {
-        if (p.kind === 'steps') p.setStage(true);   // im Ablauf läuft das Video in jedem Schritt
-        else {
-          // oben erst nach dem Schlag der Klappe (Intro), sonst sofort
-          setTimeout(() => p.setStage(true), Math.max(0, introUntil - performance.now()));
-        }
-      });
-    }).catch(() => {});
+    selectTab('standard');
   }
 
-  /* ---------- Telefon als App: Leiste unten, ein Bereich nach dem anderen ----------
-     head.js setzt .app vor dem ersten Bild; hier kommen die Bereiche dazu. Ohne JavaScript bleibt alles untereinander. */
-  const appQuery = window.matchMedia('(max-width: 37.49em) and (min-height: 31.3em)');
-  const isHome = document.querySelector('[data-tabbar]') !== null;
-  const tabSections = [...document.querySelectorAll('[data-tab]')];
-  const tabLinks = [...document.querySelectorAll('[data-tab-link]')];
-  let currentTab = 'ablauf';
-  const tabOf = (el) => (el && el.closest ? el.closest('[data-tab]')?.dataset.tab : undefined);
+  /* ---------- Kontakt: wechselndes Wort ---------- */
+  const rot = $('[data-rotate]');
+  if (rot) {
+    const words = $$('.rot-w', rot);
+    let i = 0;
+    setInterval(() => {
+      if (!canMove() || document.hidden) return;
+      const cur = words[i];
+      i = (i + 1) % words.length;
+      cur.classList.remove('is-on');
+      cur.classList.add('is-out');
+      words[i].classList.remove('is-out');
+      words[i].classList.add('is-on');
+      setTimeout(() => cur.classList.remove('is-out'), 650);
+    }, 2400);
+  }
 
-  const showTab = (name) => {
-    currentTab = name;
-    tabSections.forEach((sec) => sec.classList.toggle('is-current', sec.dataset.tab === name));
-    tabLinks.forEach((a) => {
-      if (a.dataset.tabLink === name) a.setAttribute('aria-current', 'true');
-      else a.removeAttribute('aria-current');
-    });
-  };
-
-  // Bereich zeigen und genau zum Ziel scrollen (bei „Anfragen“ also zum Formular, nicht zur Kennzahl davor);
-  // aus der Leiste heraus bekommt die Überschrift des Ziels den Fokus
-  const openTarget = (target, fromBar) => {
-    const name = tabOf(target);
-    if (!name) return false;
-    showTab(name);
-    requestAnimationFrame(() => {
-      const top = target.getBoundingClientRect().top + window.scrollY - 8;
-      window.scrollTo({ top, behavior: motionOK() ? 'smooth' : 'auto' });
-      if (fromBar) {
-        const h = target.closest('[data-tab]').querySelector('h2');
-        if (h) { h.setAttribute('tabindex', '-1'); h.focus({ preventScroll: true }); }
-      }
-    });
-    return true;
-  };
-
-  const setApp = (on) => {
-    root.classList.toggle('app', on);
-    root.classList.toggle('app-ready', on);
-    if (on) showTab(currentTab);
-  };
-
-  if (isHome) {
-    setApp(appQuery.matches);
-    appQuery.addEventListener('change', (e) => setApp(e.matches));
-
-    document.addEventListener('click', (e) => {
-      if (!root.classList.contains('app')) return;
-      const a = e.target.closest('a[href*="#"]');
-      if (!a) return;
-      const url = new URL(a.href, window.location.href);
-      if (url.pathname !== window.location.pathname || !url.hash) return;
-      const target = document.getElementById(decodeURIComponent(url.hash.slice(1)));
-      if (!target || !tabOf(target)) return;          // z. B. #top: normal scrollen
-      e.preventDefault();
-      history.replaceState(null, '', url.hash);
-      openTarget(target, Boolean(a.closest('[data-tabbar]')));
-    });
-
-    // Mit Anker geladen (z. B. /#kontakt von Impressum oder Datenschutz): passenden Bereich öffnen
-    const fromHash = () => {
-      if (!root.classList.contains('app') || !window.location.hash) return;
-      const target = document.getElementById(decodeURIComponent(window.location.hash.slice(1)));
-      if (target && tabOf(target)) openTarget(target, false);
+  /* ---------- Leiste unten (Telefon) ----------
+     Erscheint erst nach dem ersten Bildschirm und geht bei Kontakt und Fußzeile weg. */
+  const mbar = $('[data-mbar]');
+  const contact = $('#kontakt');
+  const foot = $('.ft');
+  if (hero && contact && 'IntersectionObserver' in window) {
+    const seen = { hero: true, contact: false, foot: false };
+    const upd = () => {
+      if (mbar) mbar.classList.toggle('is-shown', !seen.hero && !seen.contact && !seen.foot);
     };
-    window.addEventListener('hashchange', fromHash);
-    fromHash();
+    new IntersectionObserver(([e]) => { seen.hero = e.isIntersecting; upd(); }).observe(hero);
+    new IntersectionObserver(([e]) => { seen.contact = e.isIntersecting; upd(); }).observe(contact);
+    if (foot) new IntersectionObserver(([e]) => { seen.foot = e.isIntersecting; upd(); }).observe(foot);
   }
 
-  /* ---------- Freigabe-Beispiel: freigeben oder Änderung wünschen ----------
-     Zustände wie im Kundenportal: „Änderungen offen“ (mit oder ohne Kommentar) und „Content freigegeben“. */
-  const approveBox = document.querySelector('[data-approve]');
-  const approveBtn = document.querySelector('[data-approve-btn]');
-  const requestBtn = document.querySelector('[data-request-btn]');
-  const approveLabel = document.querySelector('[data-approve-label]');
-  const approveNote = document.getElementById('approve-note');
-  if (approveBox && approveBtn && requestBtn && approveLabel && approveNote) {
-    const setApprove = (state) => {
-      const approved = state === 'approved';
-      const asked = state === 'asked';
-      approveBtn.textContent = approved ? 'Freigabe zurücknehmen' : 'Freigeben';
-      approveLabel.textContent = approved ? 'Content freigegeben' : 'Änderungen offen';
-      requestBtn.hidden = approved;
-      requestBtn.textContent = asked ? 'Kommentar zurücknehmen' : 'Änderung wünschen';
-      requestBtn.setAttribute('aria-expanded', String(asked));
-      approveNote.hidden = !asked;
-      approveBox.classList.toggle('is-approved', approved);
-      approveBox.classList.toggle('is-asked', asked);
-      monitor?.classList.toggle('is-approved', approved);
-    };
-    approveBtn.addEventListener('click', () => setApprove(approveBox.classList.contains('is-approved') ? 'open' : 'approved'));
-    requestBtn.addEventListener('click', () => setApprove(approveBox.classList.contains('is-asked') ? 'open' : 'asked'));
-  }
-
-  /* ---------- Paketmonate: spielen sich beim Einblenden Tag für Tag ab ---------- */
-  const DAY_MS = 16;
-  const d = (day, extra = 0) => `--d:${(day - 1) * DAY_MS + extra}ms`;
-  const months = [...document.querySelectorAll('[data-month]')];
-  months.forEach((el) => {
-    const m = JSON.parse(el.dataset.month);
-    let h = '';
-    for (let w = 1; w <= 4; w++) h += `<span class="mw" style="grid-column:${(w - 1) * 7 + 1} / span 7">Woche ${w}</span>`;
-    (m.dreh || []).forEach((x) => {
-      h += `<span class="mi mi-dreh" style="grid-column:${x};${d(x)}"></span><span class="mi-dreh-label" style="grid-column:${x + 1} / span 6;${d(x, 80)}">Drehtag</span>`;
-    });
-    (m.reel || []).forEach((x) => { h += `<span class="mi mi-reel" style="grid-column:${x};${d(x, 60)}"></span>`; });
-    if (m.reelMore) h += `<span class="mi-more" style="grid-column:28;${d(28, 80)}">+</span>`;
-    (m.feed || []).forEach((x) => { h += `<span class="mi mi-feed" style="grid-column:${x};${d(x, 60)}"></span>`; });
-    if (m.foto) h += `<span class="mi mi-foto" style="grid-column:${m.foto[0]} / ${m.foto[1] + 1};${d(m.foto[0], 60)}"></span>`;
-    if (m.storySpan) h += `<span class="mi-story-span" style="${d(1, 120)}"></span>`;
-    (m.storyTicks || []).forEach((x) => { h += `<span class="mi mi-story" style="grid-column:${x};${d(x, 120)}"></span>`; });
-    h += `<span class="mi-report" style="${d(28, 160)}"></span>`;
-    el.innerHTML = h;
-  });
-  if (motionOK() && 'IntersectionObserver' in window) {
-    const play = new IntersectionObserver((entries) => entries.forEach((e) => {
-      if (!e.isIntersecting) return;
-      e.target.classList.remove('will-play');
-      play.unobserve(e.target);
-    }), { threshold: 0.4 });
-    months.forEach((el) => {
-      if (el.getBoundingClientRect().top > window.innerHeight) { el.classList.add('will-play'); play.observe(el); }
-    });
-  }
-
-  /* ---------- Abschnitts-Überschriften fahren beim Einblenden zeilenweise hoch ---------- */
-  const heads = [...document.querySelectorAll('main .h2')];
-  heads.forEach((h) => {
-    [...h.children].forEach((span) => {
-      const ln = document.createElement('span');
-      ln.className = 'ln';
-      while (span.firstChild) ln.appendChild(span.firstChild);
-      span.appendChild(ln);
-    });
-  });
-  if (motionOK() && 'IntersectionObserver' in window) {
-    const rise = new IntersectionObserver((entries) => entries.forEach((e) => {
-      if (!e.isIntersecting) return;
-      e.target.classList.remove('will-rise');
-      rise.unobserve(e.target);
-    }), { rootMargin: '0px 0px -12% 0px' });
-    heads.forEach((h) => {
-      if (h.getBoundingClientRect().top > window.innerHeight) { h.classList.add('will-rise'); rise.observe(h); }
-    });
-  }
+  applyStill();
 
   /* ---------- Formular ----------
-     Sendet an /anfrage.php (data-endpoint). Ohne JavaScript schickt der Browser das Formular
-     direkt dorthin und bekommt eine Antwortseite. Eingaben bleiben bei jedem Fehler stehen. */
+     Sendet an /anfrage.php (data-endpoint). Ohne JavaScript schickt der Browser das Formular direkt dorthin.
+     Eingaben bleiben bei jedem Fehler stehen. */
   const form = document.getElementById('anfrage');
-  if (form) {
-    const statusBox = form.querySelector('[data-form-status]');
-    const submitBtn = form.querySelector('[data-submit]');
-    const submitLabel = submitBtn.firstChild;
-    const DEFAULT_LABEL = submitLabel.textContent;
-    const MAIL = 'info@maximalmobil.de';
-    const PHONE = '+49 173 6386145';
-    const TIMEOUT_MS = 15000;
-    const loadedAt = performance.now();
-    const fallback = `Schreiben Sie uns an <a href="mailto:${MAIL}">${MAIL}</a> oder rufen Sie an: <a href="tel:+491736386145">${PHONE}</a>.`;
-    let sending = false;
+  if (!form) return;
+  const statusBox = $('[data-form-status]', form);
+  const submitBtn = $('[data-submit]', form);
+  const DEFAULT_LABEL = submitBtn.textContent;
+  const MAIL = 'info@maximalmobil.de';
+  const PHONE = '+49 173 6386145';
+  const TIMEOUT_MS = 15000;
+  const loadedAt = performance.now();
+  let sending = false;
 
-    // Feld oder Feldgruppe -> Fehlermeldung
-    const ERROR_TARGETS = {
-      betrieb: { id: 'e-betrieb', inputs: () => [form.betrieb] },
-      name: { id: 'e-name', inputs: () => [form.name] },
-      reach: { id: 'e-reach', inputs: () => [form.email, form.telefon] },
-      email: { id: 'e-reach', inputs: () => [form.email] },
-      telefon: { id: 'e-reach', inputs: () => [form.telefon] },
-      nachricht: { id: 'e-msg', inputs: () => [form.nachricht] },
-    };
+  const ERROR_TARGETS = {
+    betrieb: { id: 'e-betrieb', inputs: () => [form.betrieb] },
+    name: { id: 'e-name', inputs: () => [form.name] },
+    reach: { id: 'e-reach', inputs: () => [form.email, form.telefon] },
+    email: { id: 'e-reach', inputs: () => [form.email] },
+    telefon: { id: 'e-reach', inputs: () => [form.telefon] },
+    nachricht: { id: 'e-msg', inputs: () => [form.nachricht] },
+  };
+  const setInvalid = (inputs, errorId, invalid, message) => {
+    const err = document.getElementById(errorId);
+    inputs.forEach((inp) => { if (invalid) inp.setAttribute('aria-invalid', 'true'); else inp.removeAttribute('aria-invalid'); });
+    if (message) err.textContent = message;
+    err.hidden = !invalid;
+  };
+  const clearAll = () => Object.values(ERROR_TARGETS).forEach((t) => setInvalid(t.inputs(), t.id, false));
 
-    const setInvalid = (inputs, errorId, invalid, message) => {
-      const err = document.getElementById(errorId);
-      inputs.forEach((inp) => { if (invalid) inp.setAttribute('aria-invalid', 'true'); else inp.removeAttribute('aria-invalid'); });
-      if (message) err.textContent = message;
-      err.hidden = !invalid;
-    };
+  // Privatleute haben keinen Betrieb: das Feld tritt zurück, anfrage.php bekommt „Privatperson“
+  const betriebField = $('[data-betrieb-field]', form);
+  const isPrivat = () => ($('input[name="branche"]:checked', form) || {}).value === 'Privat';
+  const syncPrivat = () => {
+    betriebField.hidden = isPrivat();
+    if (isPrivat()) {
+      setInvalid([form.betrieb], 'e-betrieb', false);
+      if (paketInput.value) setPaket('');
+    }
+  };
+  $$('input[name="branche"]', form).forEach((r) => r.addEventListener('change', syncPrivat));
 
-    const clearAll = () => {
-      Object.values(ERROR_TARGETS).forEach((t) => setInvalid(t.inputs(), t.id, false));
-    };
+  const validate = () => {
+    let first = null;
+    [['betrieb', 'e-betrieb'], ['name', 'e-name']].filter(([name]) => !(name === 'betrieb' && isPrivat())).forEach(([name, id]) => {
+      const bad = form[name].value.trim() === '';
+      setInvalid([form[name]], id, bad);
+      if (bad && !first) first = form[name];
+    });
+    const mail = form.email.value.trim();
+    const tel = form.telefon.value.trim();
+    const telDigits = tel.replace(/\D/g, '');
+    if (!mail && !tel) {
+      setInvalid([form.email, form.telefon], 'e-reach', true, 'Bitte geben Sie eine E-Mail-Adresse oder eine Telefonnummer an, damit wir uns melden können.');
+      if (!first) first = form.email;
+    } else if (mail && (!form.email.checkValidity() || !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(mail))) {
+      setInvalid([form.email], 'e-reach', true, tel
+        ? 'Bitte prüfen Sie die E-Mail-Adresse, zum Beispiel name@betrieb.de, oder lassen Sie das Feld leer.'
+        : 'Bitte prüfen Sie die E-Mail-Adresse, zum Beispiel name@betrieb.de. Oder lassen Sie das Feld leer und geben Sie Ihre Telefonnummer an.');
+      form.telefon.removeAttribute('aria-invalid');
+      if (!first) first = form.email;
+    } else if (tel && (!/^[0-9+()/.\-\s]+$/.test(tel) || telDigits.length < 5)) {
+      setInvalid([form.telefon], 'e-reach', true, telDigits.length < 5 && /^[0-9+()/.\-\s]+$/.test(tel)
+        ? 'Die Telefonnummer ist zu kurz. Bitte geben Sie sie mit Vorwahl an, zum Beispiel 0123 456789.'
+        : 'Bitte geben Sie die Telefonnummer nur mit Ziffern und + ( ) / - an, zum Beispiel 0123 456789.');
+      form.email.removeAttribute('aria-invalid');
+      if (!first) first = form.telefon;
+    } else {
+      setInvalid([form.email, form.telefon], 'e-reach', false);
+    }
+    setInvalid([form.nachricht], 'e-msg', false);
+    return first;
+  };
+  const showServerErrors = (errors) => {
+    clearAll();
+    let first = null;
+    Object.entries(errors || {}).forEach(([key, msg]) => {
+      const t = ERROR_TARGETS[key];
+      if (!t) return;
+      setInvalid(t.inputs(), t.id, true, msg);
+      if (!first) first = t.inputs()[0];
+    });
+    return first;
+  };
+  form.addEventListener('input', (e) => { if (e.target.getAttribute('aria-invalid') === 'true') validate(); });
+  const msgCount = $('[data-msg-count]', form);
+  const syncCount = () => {
+    if (!msgCount) return;
+    const left = 3000 - form.nachricht.value.length;
+    msgCount.hidden = left > 300;
+    msgCount.textContent = left > 0 ? `Noch ${left.toLocaleString('de-DE')} Zeichen.` : 'Die Nachricht hat die Höchstlänge von 3.000 Zeichen erreicht.';
+  };
+  form.nachricht.addEventListener('input', syncCount);
 
-    const validate = () => {
-      let first = null;
-      [['betrieb', 'e-betrieb'], ['name', 'e-name']].forEach(([name, id]) => {
-        const bad = form[name].value.trim() === '';
-        setInvalid([form[name]], id, bad);
-        if (bad && !first) first = form[name];
-      });
-      const mail = form.email.value.trim();
-      const tel = form.telefon.value.trim();
-      const telDigits = tel.replace(/\D/g, '');
-      if (!mail && !tel) {
-        setInvalid([form.email, form.telefon], 'e-reach', true, 'Bitte geben Sie eine E-Mail-Adresse oder eine Telefonnummer an, damit wir uns melden können.');
-        if (!first) first = form.email;
-      } else if (mail && !form.email.checkValidity()) {
-        setInvalid([form.email], 'e-reach', true, tel
-          ? 'Bitte prüfen Sie die E-Mail-Adresse, zum Beispiel name@betrieb.de, oder lassen Sie das Feld leer.'
-          : 'Bitte prüfen Sie die E-Mail-Adresse, zum Beispiel name@betrieb.de. Oder lassen Sie das Feld leer und geben Sie Ihre Telefonnummer an.');
-        form.telefon.removeAttribute('aria-invalid');
-        if (!first) first = form.email;
-      } else if (tel && (!/^[0-9+()/.\-\s]+$/.test(tel) || telDigits.length < 5)) {
-        setInvalid([form.telefon], 'e-reach', true, 'Bitte geben Sie die Telefonnummer nur mit Ziffern und + ( ) / - an, zum Beispiel 0123 456789.');
-        form.email.removeAttribute('aria-invalid');
-        if (!first) first = form.telefon;
+  // Aus den Branchen oder Paketen kommend: Branche bzw. Paket ist schon gewählt.
+  const picks = $('[data-picks]', form);
+  const paketChip = $('[data-paket-chip]', form);
+  const paketInput = $('[data-paket-input]', form);
+  const paketName = $('[data-paket-name]', form);
+  const syncPicks = () => { picks.hidden = paketChip.hidden; };
+  const setPaket = (p) => {
+    paketInput.value = p || '';
+    paketName.textContent = p || '';
+    paketChip.hidden = !p;
+    syncPicks();
+  };
+  const firstField = () => (isPrivat() ? form.name : form.betrieb);
+  $('[data-paket-remove]', form)?.addEventListener('click', () => { setPaket(''); firstField().focus(); });
+  $$('[data-ask-paket]').forEach((a) => a.addEventListener('click', () => setPaket(a.dataset.askPaket)));
+  const LABEL = { auto: 'Automobil', immo: 'Immobilien', privat: 'Privat' };
+  $$('[data-ask-branche]').forEach((a) => a.addEventListener('click', () => {
+    $$('input[name="branche"]', form).forEach((r) => { r.checked = r.value === LABEL[a.dataset.askBranche]; });
+    if (a.dataset.askBranche === 'privat') setPaket('');
+    syncPrivat();
+  }));
+  const nachrichtMit = () => form.nachricht.value.trim().slice(0, 3000);
+
+  const showStatus = (kind, html) => {
+    statusBox.className = `status${kind === 'ok' ? ' is-ok' : ''}`;
+    statusBox.innerHTML = html;
+    statusBox.hidden = false;
+    statusBox.focus();
+  };
+  const busy = (on) => {
+    sending = on;
+    submitBtn.disabled = on;
+    form.setAttribute('aria-busy', String(on));
+    submitBtn.textContent = on ? 'Wird gesendet …' : DEFAULT_LABEL;
+  };
+  const mailtoHref = () => {
+    const v = (k) => (form[k] ? form[k].value : '').toString().trim();
+    const branche = ($('input[name="branche"]:checked', form) || {}).value || 'nicht angegeben';
+    const betrieb = isPrivat() ? 'Privatperson' : v('betrieb');
+    const body = [`Branche: ${branche}`, `Paket: ${v('paket') || 'nicht angegeben'}`, `Betrieb: ${betrieb}`, `Name: ${v('name')}`, `E-Mail: ${v('email') || '–'}`, `Telefon: ${v('telefon') || '–'}`, '', nachrichtMit()].join('\n');
+    return `mailto:${MAIL}?subject=${encodeURIComponent(`Erstgespräch-Anfrage: ${betrieb}`)}&body=${encodeURIComponent(body)}`;
+  };
+  // Nach dem Senden weicht das Formular einer Bestätigung mit Name, Kontaktweg und nächstem Schritt
+  const showSent = ({ name, email, tel }) => {
+    const via = email && tel ? `per E-Mail an ${email} oder telefonisch unter ${tel}` : email ? `per E-Mail an ${email}` : `telefonisch unter ${tel}`;
+    statusBox.className = 'status is-ok';
+    statusBox.textContent = '';
+    const head = document.createElement('strong');
+    head.textContent = name ? `Danke, ${name}.` : 'Danke.';
+    const p1 = document.createElement('p');
+    p1.textContent = 'Ihre Anfrage ist angekommen.';
+    const p2 = document.createElement('p');
+    p2.textContent = `Wir melden uns ${via}, um einen Termin für das kostenlose Erstgespräch zu finden.`;
+    const again = document.createElement('button');
+    again.type = 'button';
+    again.className = 'btn btn-line';
+    again.textContent = 'Weitere Anfrage senden';
+    again.addEventListener('click', () => {
+      form.classList.remove('is-sent');
+      statusBox.hidden = true;
+      firstField().focus();
+    });
+    statusBox.append(head, p1, p2, again);
+    form.classList.add('is-sent');
+    statusBox.hidden = false;
+    statusBox.focus();
+  };
+  const rescue = () => `Sie können die Anfrage auch <a href="${mailtoHref().replace(/"/g, '&quot;')}">als E-Mail senden</a> oder anrufen: <a href="tel:+491736386145">${PHONE}</a>.`;
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (sending) return;
+    const firstInvalid = validate();
+    if (firstInvalid) { firstInvalid.focus(); return; }
+    if (navigator.onLine === false) {
+      showStatus('error', '<strong>Sie sind gerade offline.</strong>Ihre Eingaben sind noch da. Sobald die Verbindung wieder steht, senden Sie die Anfrage einfach noch einmal.');
+      return;
+    }
+    const data = new FormData(form);
+    data.set('fill_ms', String(Math.round(performance.now() - loadedAt)));
+    data.set('nachricht', nachrichtMit());
+    if (isPrivat()) data.set('betrieb', 'Privatperson');
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
+    busy(true);
+    try {
+      const res = await fetch(form.dataset.endpoint, { method: 'POST', body: data, headers: { Accept: 'application/json' }, signal: ctrl.signal });
+      let json = {};
+      try { json = await res.json(); } catch (err) { json = {}; }
+      if (res.ok && json.ok) {
+        const sent = { name: form.name.value.trim(), email: form.email.value.trim(), tel: form.telefon.value.trim() };
+        form.reset();
+        clearAll();
+        setPaket('');
+        syncPrivat();
+        syncCount();
+        showSent(sent);
+      } else if (res.status === 422) {
+        const first = showServerErrors(json.errors);
+        statusBox.hidden = true;
+        if (first) first.focus();
+      } else if (res.status === 429) {
+        showStatus('error', `<strong>Zu viele Anfragen in kurzer Zeit.</strong>Ihre Eingaben sind noch da. Bitte versuchen Sie es in einer Stunde noch einmal. ${rescue()}`);
       } else {
-        setInvalid([form.email, form.telefon], 'e-reach', false);
+        showStatus('error', `<strong>Ihre Anfrage wurde nicht gesendet.</strong>Das lag an uns, nicht an Ihnen. Ihre Eingaben sind noch da. Versuchen Sie es in ein paar Minuten noch einmal. ${rescue()}`);
       }
-      setInvalid([form.nachricht], 'e-msg', false);
-      return first;
-    };
-
-    // Fehler des Servers an die passenden Felder schreiben
-    const showServerErrors = (errors) => {
-      clearAll();
-      let first = null;
-      Object.entries(errors || {}).forEach(([key, msg]) => {
-        const t = ERROR_TARGETS[key];
-        if (!t) return;
-        setInvalid(t.inputs(), t.id, true, msg);
-        if (!first) first = t.inputs()[0];
-      });
-      return first;
-    };
-
-    form.addEventListener('input', (e) => {
-      if (e.target.getAttribute('aria-invalid') === 'true') validate();
-    });
-
-    // Aus Branchen oder Paketen kommend: Branche bzw. Paket ist im Formular schon gewählt
-    const paketField = form.querySelector('[data-paket-field]');
-    const paketInput = form.querySelector('[data-paket-input]');
-    const paketName = form.querySelector('[data-paket-name]');
-    const setPaket = (p) => {
-      if (!paketField || !paketInput || !paketName) return;
-      paketInput.value = p || '';
-      paketName.textContent = p || '';
-      paketField.hidden = !p;
-    };
-    form.querySelector('[data-paket-remove]')?.addEventListener('click', () => { setPaket(''); form.betrieb.focus(); });
-    document.querySelectorAll('[data-ask-paket]').forEach((a) => a.addEventListener('click', () => setPaket(a.dataset.askPaket)));
-    document.querySelectorAll('[data-ask-branche]').forEach((a) => a.addEventListener('click', () => setBranche(a.dataset.askBranche, 'link')));
-
-    const showStatus = (kind, html) => {
-      statusBox.className = `form-status${kind === 'ok' ? ' is-ok' : ''}`;
-      statusBox.innerHTML = html;
-      statusBox.hidden = false;
-      statusBox.focus();
-    };
-
-    const busy = (on) => {
-      sending = on;
-      submitBtn.disabled = on;
-      form.setAttribute('aria-busy', String(on));
-      submitLabel.textContent = on ? 'Wird gesendet … ' : DEFAULT_LABEL;
-    };
-
-    // Fertige Anfrage als E-Mail: Rettungsweg, wenn der Server nicht erreichbar ist
-    const mailtoHref = () => {
-      const v = (k) => (form[k] ? form[k].value : '').toString().trim();
-      const branche = (form.querySelector('input[name="branche"]:checked') || {}).value || 'nicht angegeben';
-      const body = [`Branche: ${branche}`, `Paket: ${v('paket') || 'nicht angegeben'}`, `Betrieb: ${v('betrieb')}`, `Name: ${v('name')}`, `E-Mail: ${v('email') || '–'}`, `Telefon: ${v('telefon') || '–'}`, '', v('nachricht')].join('\n');
-      return `mailto:${MAIL}?subject=${encodeURIComponent(`Erstgespräch-Anfrage: ${v('betrieb')}`)}&body=${encodeURIComponent(body)}`;
-    };
-    const rescue = () => `Sie können die Anfrage auch <a href="${mailtoHref().replace(/"/g, '&quot;')}">als E-Mail senden</a> oder anrufen: <a href="tel:+491736386145">${PHONE}</a>.`;
-
-    form.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      if (sending) return; // kein doppeltes Senden
-      const firstInvalid = validate();
-      if (firstInvalid) { firstInvalid.focus(); return; }
-
-      const endpoint = form.dataset.endpoint;
-      if (!endpoint) {
-        window.location.href = mailtoHref();
-        showStatus('info', `<strong>Fast geschafft.</strong>Ihr E-Mail-Programm öffnet sich mit der fertigen Anfrage. Bitte dort auf Senden klicken. Öffnet sich nichts, bleiben Ihre Eingaben hier stehen. ${fallback}`);
-        return;
-      }
-
-      if (navigator.onLine === false) {
-        showStatus('error', `<strong>Sie sind gerade offline.</strong>Ihre Eingaben sind noch da. Sobald die Verbindung wieder steht, senden Sie die Anfrage einfach noch einmal.`);
-        return;
-      }
-
-      const data = new FormData(form);
-      data.set('fill_ms', String(Math.round(performance.now() - loadedAt)));
-
-      const ctrl = new AbortController();
-      const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
-      busy(true);
-      try {
-        const res = await fetch(endpoint, { method: 'POST', body: data, headers: { Accept: 'application/json' }, signal: ctrl.signal });
-        let json = {};
-        try { json = await res.json(); } catch { json = {}; }
-
-        if (res.ok && json.ok) {
-          form.reset();
-          clearAll();
-          setPaket('');
-          setBranche('', 'reset');
-          showStatus('ok', '<strong>Danke, Ihre Anfrage ist angekommen.</strong>Wir melden uns bei Ihnen, um einen Termin für das Erstgespräch zu finden.');
-        } else if (res.status === 422) {
-          const first = showServerErrors(json.errors);
-          statusBox.hidden = true;
-          if (first) first.focus();
-        } else if (res.status === 429) {
-          showStatus('error', `<strong>Zu viele Anfragen in kurzer Zeit.</strong>Ihre Eingaben sind noch da. Bitte versuchen Sie es in einer Stunde noch einmal. ${rescue()}`);
-        } else {
-          showStatus('error', `<strong>Ihre Anfrage wurde nicht gesendet.</strong>Das lag an uns, nicht an Ihnen. Ihre Eingaben sind noch da. Versuchen Sie es in ein paar Minuten noch einmal. ${rescue()}`);
-        }
-      } catch (err) {
-        const timedOut = err && err.name === 'AbortError';
-        showStatus('error', timedOut
-          ? `<strong>Noch keine Bestätigung.</strong>Unser Server hat nicht rechtzeitig geantwortet. Vielleicht ist Ihre Anfrage trotzdem angekommen. Ihre Eingaben sind noch da: Senden Sie ruhig noch einmal, schlimmstenfalls erreicht uns die Anfrage doppelt. ${rescue()}`
-          : `<strong>Ihre Anfrage wurde nicht gesendet.</strong>Die Verbindung zu unserem Server kam nicht zustande. Ihre Eingaben sind noch da. Versuchen Sie es gleich noch einmal. ${rescue()}`);
-      } finally {
-        clearTimeout(timer);
-        busy(false);
-      }
-    });
-  }
+    } catch (err) {
+      const timedOut = err && err.name === 'AbortError';
+      showStatus('error', timedOut
+        ? `<strong>Noch keine Bestätigung.</strong>Unser Server hat nicht rechtzeitig geantwortet. Vielleicht ist Ihre Anfrage trotzdem angekommen. Ihre Eingaben sind noch da: Senden Sie ruhig noch einmal, schlimmstenfalls erreicht uns die Anfrage doppelt. ${rescue()}`
+        : `<strong>Ihre Anfrage wurde nicht gesendet.</strong>Die Verbindung zu unserem Server kam nicht zustande. Ihre Eingaben sind noch da. Versuchen Sie es gleich noch einmal. ${rescue()}`);
+    } finally {
+      clearTimeout(timer);
+      busy(false);
+    }
+  });
 })();

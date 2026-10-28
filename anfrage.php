@@ -27,7 +27,7 @@ const RATE_MAX    = 5;
 const RATE_WINDOW = 3600;                     // Sekunden
 const MIN_FILL_MS = 2500;                     // schneller ausgefüllt = sehr wahrscheinlich ein Bot
 const LIMITS      = ['betrieb' => 120, 'name' => 100, 'email' => 160, 'telefon' => 40, 'nachricht' => 3000];
-const BRANCHEN    = ['Automobil', 'Immobilien'];
+const BRANCHEN    = ['Automobil', 'Immobilien', 'Privat'];
 const PAKETE      = ['Basis', 'Standard', 'Premium'];
 const PHONE_SHOWN = '+49 173 6386145';
 const PHONE_LINK  = '+491736386145';
@@ -98,7 +98,7 @@ function respond(int $status, array $payload): void
     exit;
 }
 
-/** Antwortseite für Besucher ohne JavaScript, im Look der Rechtsseiten. */
+/** Antwortseite für Besucher ohne JavaScript, im Look der Rechtsseiten (Fassung „Der Sucher“, 28.10.2026). */
 function render_page(int $status, array $payload): void
 {
     $mail = h(MAIL_TO);
@@ -107,7 +107,7 @@ function render_page(int $status, array $payload): void
 
     if ($status === 200) {
         $title = 'Danke, Ihre Anfrage ist angekommen.';
-        $body = '<p>Wir melden uns bei Ihnen, um einen Termin für das Erstgespräch zu finden.</p>';
+        $body = '<p>Wir melden uns bei Ihnen, um einen Termin für das kostenlose Erstgespräch zu finden.</p>';
     } elseif ($status === 422) {
         $title = 'Bitte prüfen Sie Ihre Angaben.';
         $items = '';
@@ -122,45 +122,68 @@ function render_page(int $status, array $payload): void
     }
 
     echo '<!doctype html>
-<html lang="de" class="no-js">
+<html lang="de">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>' . h($title) . ' – maximalmobil</title>
 <meta name="robots" content="noindex">
 <meta name="theme-color" content="#0a0a0a">
-<meta name="color-scheme" content="dark light">
+<meta name="color-scheme" content="dark">
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="/css/style.css?v=2026-10-28b">
-<script src="/js/head.js?v=2026-10-28b"></script>
+<link rel="preload" href="/assets/fonts/syne-800.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="/assets/fonts/outfit-300.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/css/style.css?v=2026-10-28-v3b">
+<title>' . h($title) . ' – maximalmobil</title>
 </head>
-<body>
-<div class="bg" aria-hidden="true">
-  <div class="wrap bg-grid"><div class="bg-cols"><span></span><span></span><span></span><span></span><span></span><span></span></div></div>
-  <div class="bg-rule"></div>
-</div>
-<header class="site-head wrap">
-  <a class="brand" href="/" aria-label="maximalmobil, zur Startseite"><img class="logo-dark" src="/assets/logo/wortmarke.svg" alt="" width="190" height="18"><img class="logo-light" src="/assets/logo/wortmarke-hell.svg" alt="" width="190" height="18"></a>
-  <button class="theme-toggle" type="button" data-theme-toggle aria-pressed="false" aria-label="Helles Design"><svg class="t-sun" viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="3.6" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M10 2.4v1.9M10 15.7v1.9M2.4 10h1.9M15.7 10h1.9M4.6 4.6 6 6M14 14l1.4 1.4M4.6 15.4 6 14M14 6l1.4-1.4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg><svg class="t-moon" viewBox="0 0 20 20" aria-hidden="true"><path d="M15.8 12.3A6.5 6.5 0 0 1 7.7 4.2a6.5 6.5 0 1 0 8.1 8.1z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg></button>
+<body class="page-legal">
+<svg class="sprite" aria-hidden="true" focusable="false">
+  <symbol id="i-arrow" viewBox="0 0 20 20"><path d="M4 10h11.5M11 5.5 15.5 10 11 14.5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-left" viewBox="0 0 20 20"><path d="M16 10H4.5M9 5.5 4.5 10 9 14.5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-out" viewBox="0 0 20 20"><path d="M6 14 14 6M7.5 6H14v6.5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+</svg>
+<div class="grid-bg" aria-hidden="true"><div><span></span><span></span><span></span><span></span><span></span><span></span></div></div>
+<header class="head">
+  <div class="head-in">
+    <a class="brand" href="/" aria-label="maximalmobil, zur Startseite"><img src="/assets/logo/wortmarke.svg" alt="" width="190" height="18"></a>
+  </div>
 </header>
-<main class="legal wrap">
-  <article class="legal-body">
-    <h1>' . h($title) . '</h1>
-    ' . $body . '
-    <p><a href="/">Zur Startseite</a></p>
-  </article>
+<main id="inhalt" class="legal">
+  <div class="wrap cols">
+    <article class="legal-body c-2-5">
+      <a class="back" href="/"><svg class="i" aria-hidden="true"><use href="#i-left"/></svg>Zur Startseite</a>
+      <h1 class="h-msg">' . h($title) . '</h1>
+      ' . $body . '
+    </article>
+  </div>
 </main>
-<footer class="site-foot">
-  <div class="wrap foot-grid">
-    <div class="foot-brand">
-      <img class="logo-dark" src="/assets/logo/wortmarke.svg" alt="maximalmobil" width="160" height="15"><img class="logo-light" src="/assets/logo/wortmarke-hell.svg" alt="maximalmobil" width="160" height="15">
-      <p>Social Media Agentur für Automobil und Immobilien</p>
+<footer class="ft ft-legal">
+  <div class="wrap cols ft-cols">
+    <div class="ft-col c-1-2">
+      <p class="ft-claim">Social Media Agentur für Automobil und Immobilien. Fotos und Videos auch für Privatleute.</p>
     </div>
-    <nav class="foot-nav" aria-label="Rechtliches">
+    <nav class="ft-col c-3" aria-label="Seiten">
+      <p class="label">Seiten</p>
+      <a href="/">Startseite</a>
+      <a href="/#kontakt">Kontakt</a>
+    </nav>
+    <div class="ft-col c-4">
+      <p class="label">Kontakt</p>
+      <a href="tel:+491736386145">+49 173 6386145</a>
+      <a href="mailto:info@maximalmobil.de">info@maximalmobil.de</a>
+    </div>
+    <div class="ft-col c-5">
+      <p class="label">Kanäle</p>
+      <a href="https://www.instagram.com/maximalmobil/" rel="noopener" target="_blank">Instagram<svg class="i" aria-hidden="true"><use href="#i-out"/></svg><span class="sr-only"> (öffnet in neuem Tab)</span></a>
+      <a href="https://www.tiktok.com/@maximalmobil" rel="noopener" target="_blank">TikTok<svg class="i" aria-hidden="true"><use href="#i-out"/></svg><span class="sr-only"> (öffnet in neuem Tab)</span></a>
+    </div>
+    <nav class="ft-col c-6" aria-label="Rechtliches">
+      <p class="label">Rechtliches</p>
       <a href="/impressum">Impressum</a>
       <a href="/datenschutz">Datenschutz</a>
     </nav>
-    <p class="foot-copy">© ' . date('Y') . ' maximalmobil</p>
+  </div>
+  <div class="wrap ft-bottom">
+    <p>© ' . date('Y') . ' maximalmobil</p>
   </div>
 </footer>
 </body>
