@@ -107,7 +107,7 @@ function render_page(int $status, array $payload): void
 
     if ($status === 200) {
         $title = 'Danke, Ihre Anfrage ist angekommen.';
-        $body = '<p>Wir melden uns bei Ihnen, um einen Termin für das kostenlose Erstgespräch zu finden.</p>';
+        $body = '<p>Wir melden uns innerhalb eines Werktags bei Ihnen, um einen Termin für das kostenlose Erstgespräch zu finden.</p>';
     } elseif ($status === 422) {
         $title = 'Bitte prüfen Sie Ihre Angaben.';
         $items = '';
@@ -132,7 +132,7 @@ function render_page(int $status, array $payload): void
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <link rel="preload" href="/assets/fonts/syne-800.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="/assets/fonts/outfit-300.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="stylesheet" href="/css/style.css?v=2026-10-28-v3c">
+<link rel="stylesheet" href="/css/style.css?v=2026-10-29-v3d">
 <title>' . h($title) . ' – maximalmobil</title>
 </head>
 <body class="page-legal">
@@ -230,6 +230,9 @@ $email     = one_line(post('email'));
 $telefon   = one_line(post('telefon'));
 $nachricht = multi_line(post('nachricht'));
 
+// Privatleute haben keinen Betrieb (ohne JavaScript bleibt das Feld sichtbar und oft leer)
+if ($betrieb === '' && $branche === 'Privat') $betrieb = 'Privatperson';
+
 $errors = [];
 if ($betrieb === '') $errors['betrieb'] = 'Bitte nennen Sie den Namen Ihres Betriebs.';
 elseif (str_len($betrieb) > LIMITS['betrieb']) $errors['betrieb'] = 'Der Name des Betriebs ist zu lang (höchstens ' . LIMITS['betrieb'] . ' Zeichen).';
@@ -249,8 +252,11 @@ if ($email !== '') {
 
 if ($telefon !== '') {
     $digits = preg_replace('/\D/', '', $telefon) ?? '';
-    if (str_len($telefon) > LIMITS['telefon'] || !preg_match('/^[0-9+()\/.\-\s]+$/', $telefon) || strlen($digits) < 5) {
+    $telChars = preg_match('/^[0-9+()\/.\-\s]+$/', $telefon) === 1;
+    if (str_len($telefon) > LIMITS['telefon'] || !$telChars) {
         $errors['telefon'] = 'Bitte geben Sie die Telefonnummer nur mit Ziffern und + ( ) / - an, zum Beispiel 0123 456789.';
+    } elseif (strlen($digits) < 5) {
+        $errors['telefon'] = 'Die Telefonnummer ist zu kurz. Bitte geben Sie sie mit Vorwahl an, zum Beispiel 0123 456789.';
     }
 }
 

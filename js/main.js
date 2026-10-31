@@ -574,7 +574,7 @@
     const p1 = document.createElement('p');
     p1.textContent = 'Ihre Anfrage ist angekommen.';
     const p2 = document.createElement('p');
-    p2.textContent = `Wir melden uns ${via}, um einen Termin für das kostenlose Erstgespräch zu finden.`;
+    p2.textContent = `Wir melden uns innerhalb eines Werktags ${via}, um einen Termin für das kostenlose Erstgespräch zu finden.`;
     const again = document.createElement('button');
     again.type = 'button';
     again.className = 'btn btn-line';
