@@ -187,7 +187,7 @@
       const total = pin.offsetHeight - window.innerHeight;
       window.scrollTo({ top: pin.offsetTop + total * ((k + 0.5) / pinPanels.length), behavior: 'auto' });
     }));
-    // Links „Automobil / Immobilien / Privat“ im ersten Bildschirm: angepinnt zur Stelle des Panels scrollen
+    // Links „Autobetriebe / Immobilienbetriebe“ im ersten Bildschirm: angepinnt zur Stelle des Panels scrollen
     $$('[data-jump]').forEach((a) => a.addEventListener('click', (e) => {
       if (!pinOn) return;
       e.preventDefault();
@@ -458,21 +458,9 @@
   };
   const clearAll = () => Object.values(ERROR_TARGETS).forEach((t) => setInvalid(t.inputs(), t.id, false));
 
-  // Privatleute haben keinen Betrieb: das Feld tritt zurück, anfrage.php bekommt „Privatperson“
-  const betriebField = $('[data-betrieb-field]', form);
-  const isPrivat = () => ($('input[name="branche"]:checked', form) || {}).value === 'Privat';
-  const syncPrivat = () => {
-    betriebField.hidden = isPrivat();
-    if (isPrivat()) {
-      setInvalid([form.betrieb], 'e-betrieb', false);
-      if (paketInput.value) setPaket('');
-    }
-  };
-  $$('input[name="branche"]', form).forEach((r) => r.addEventListener('change', syncPrivat));
-
   const validate = () => {
     let first = null;
-    [['betrieb', 'e-betrieb'], ['name', 'e-name']].filter(([name]) => !(name === 'betrieb' && isPrivat())).forEach(([name, id]) => {
+    [['betrieb', 'e-betrieb'], ['name', 'e-name']].forEach(([name, id]) => {
       const bad = form[name].value.trim() === '';
       setInvalid([form[name]], id, bad);
       if (bad && !first) first = form[name];
@@ -534,14 +522,11 @@
     paketChip.hidden = !p;
     syncPicks();
   };
-  const firstField = () => (isPrivat() ? form.name : form.betrieb);
-  $('[data-paket-remove]', form)?.addEventListener('click', () => { setPaket(''); firstField().focus(); });
+  $('[data-paket-remove]', form)?.addEventListener('click', () => { setPaket(''); form.betrieb.focus(); });
   $$('[data-ask-paket]').forEach((a) => a.addEventListener('click', () => setPaket(a.dataset.askPaket)));
-  const LABEL = { auto: 'Automobil', immo: 'Immobilien', privat: 'Privat' };
+  const LABEL = { auto: 'Automobil', immo: 'Immobilien' };
   $$('[data-ask-branche]').forEach((a) => a.addEventListener('click', () => {
     $$('input[name="branche"]', form).forEach((r) => { r.checked = r.value === LABEL[a.dataset.askBranche]; });
-    if (a.dataset.askBranche === 'privat') setPaket('');
-    syncPrivat();
   }));
   const nachrichtMit = () => form.nachricht.value.trim().slice(0, 3000);
 
@@ -560,7 +545,7 @@
   const mailtoHref = () => {
     const v = (k) => (form[k] ? form[k].value : '').toString().trim();
     const branche = ($('input[name="branche"]:checked', form) || {}).value || 'nicht angegeben';
-    const betrieb = isPrivat() ? 'Privatperson' : v('betrieb');
+    const betrieb = v('betrieb');
     const body = [`Branche: ${branche}`, `Paket: ${v('paket') || 'nicht angegeben'}`, `Betrieb: ${betrieb}`, `Name: ${v('name')}`, `E-Mail: ${v('email') || '–'}`, `Telefon: ${v('telefon') || '–'}`, '', nachrichtMit()].join('\n');
     return `mailto:${MAIL}?subject=${encodeURIComponent(`Erstgespräch-Anfrage: ${betrieb}`)}&body=${encodeURIComponent(body)}`;
   };
@@ -582,7 +567,7 @@
     again.addEventListener('click', () => {
       form.classList.remove('is-sent');
       statusBox.hidden = true;
-      firstField().focus();
+      form.betrieb.focus();
     });
     statusBox.append(head, p1, p2, again);
     form.classList.add('is-sent');
@@ -603,7 +588,6 @@
     const data = new FormData(form);
     data.set('fill_ms', String(Math.round(performance.now() - loadedAt)));
     data.set('nachricht', nachrichtMit());
-    if (isPrivat()) data.set('betrieb', 'Privatperson');
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
     busy(true);
@@ -616,7 +600,6 @@
         form.reset();
         clearAll();
         setPaket('');
-        syncPrivat();
         syncCount();
         showSent(sent);
       } else if (res.status === 422) {

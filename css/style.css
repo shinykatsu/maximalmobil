@@ -287,7 +287,7 @@ strong,b{font-weight:400}
 .br-list li::before{content:"";flex:none;width:7px;height:7px;margin-top:.55em;border-radius:50%;background:var(--lime)}
 
 /* Angepinnt (nur Desktop mit Skript) */
-.br.is-pin{height:calc(100svh * 3.4)}
+.br.is-pin{height:calc(100svh * 2.6)}
 .br.is-pin .br-stage{position:sticky;top:var(--head);height:calc(100svh - var(--head));padding-top:clamp(20px,2.4vw,36px);display:flex;flex-direction:column;overflow:hidden}
 .br.is-pin .br-progress{display:block}
 .br.is-pin .br-panels{position:relative;flex:1;min-height:0}
@@ -545,6 +545,7 @@ html:not(.js) .cal{display:none}
   .vf-dot{animation:blink 2.4s var(--ease) infinite}
 
   [data-marquee] .marquee-row{animation:marquee var(--dur,38s) linear infinite}
+  .band .marquee{--dur:76s}
   .work-marquee{--dur:52s}
   .outline{--dur:68s}
   .outline .marquee-row{animation-direction:reverse}

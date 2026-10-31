@@ -27,7 +27,7 @@ const RATE_MAX    = 5;
 const RATE_WINDOW = 3600;                     // Sekunden
 const MIN_FILL_MS = 2500;                     // schneller ausgefüllt = sehr wahrscheinlich ein Bot
 const LIMITS      = ['betrieb' => 120, 'name' => 100, 'email' => 160, 'telefon' => 40, 'nachricht' => 3000];
-const BRANCHEN    = ['Automobil', 'Immobilien', 'Privat'];
+const BRANCHEN    = ['Automobil', 'Immobilien'];
 const PAKETE      = ['Basis', 'Standard', 'Premium'];
 const PHONE_SHOWN = '+49 173 6386145';
 const PHONE_LINK  = '+491736386145';
@@ -132,7 +132,7 @@ function render_page(int $status, array $payload): void
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <link rel="preload" href="/assets/fonts/syne-800.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="/assets/fonts/outfit-300.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="stylesheet" href="/css/style.css?v=2026-10-29-v3d">
+<link rel="stylesheet" href="/css/style.css?v=2026-10-31-v3e">
 <title>' . h($title) . ' – maximalmobil</title>
 </head>
 <body class="page-legal">
@@ -159,7 +159,7 @@ function render_page(int $status, array $payload): void
 <footer class="ft ft-legal">
   <div class="wrap cols ft-cols">
     <div class="ft-col c-1-2">
-      <p class="ft-claim">Social Media Agentur für Automobil und Immobilien. Fotos und Videos auch für Privatleute.</p>
+      <p class="ft-claim">Social Media Agentur für Automobil und Immobilien.</p>
     </div>
     <nav class="ft-col c-3" aria-label="Seiten">
       <p class="label">Seiten</p>
@@ -229,9 +229,6 @@ $name      = one_line(post('name'));
 $email     = one_line(post('email'));
 $telefon   = one_line(post('telefon'));
 $nachricht = multi_line(post('nachricht'));
-
-// Privatleute haben keinen Betrieb (ohne JavaScript bleibt das Feld sichtbar und oft leer)
-if ($betrieb === '' && $branche === 'Privat') $betrieb = 'Privatperson';
 
 $errors = [];
 if ($betrieb === '') $errors['betrieb'] = 'Bitte nennen Sie den Namen Ihres Betriebs.';
